@@ -11,7 +11,7 @@ button { font: inherit; cursor: pointer; } button:disabled { cursor: wait; opaci
 .team-card .team-player.manual-selected { padding: 8px 5px 0; outline: 2px solid #172018; border-radius: 8px; background: #fffbed70; }.custom-mode-note { margin: 10px 4px 0; color: #526857; font-size: 12px; }
 h1, h2, p { margin: 0; } h1 { font: 28px/1 Archivo Black, sans-serif; letter-spacing: -1.5px; } h1 em { color: #ef5b2a; font-style: normal; }
 h2 { font-size: 19px; letter-spacing: -.7px; } .eyebrow { color: #65715f; font: 11px/1.2 'DM Mono', monospace; letter-spacing: 1px; }
-.export-button, .panel-heading > button, .result button { border: 0; border-radius: 10px; background: #14261b; color: #fdf8e9; padding: 11px 14px; font-weight: 800; box-shadow: 0 3px 0 #07130a; }
+.export-button, .panel-heading > button, .make-teams-button, .result button { border: 0; border-radius: 10px; background: #14261b; color: #fdf8e9; padding: 11px 14px; font-weight: 800; box-shadow: 0 3px 0 #07130a; }
 .demo-banner { margin: 18px 0; border: 1px dashed #a99c67; border-radius: 10px; padding: 10px 12px; color: #61593b; font-size: 12px; }.demo-banner button { float: right; border: 0; background: transparent; font-weight: 800; }
 .panel { background: #fffbedb8; border: 1px solid #d9d4bf; border-radius: 18px; padding: 18px; margin-top: 18px; box-shadow: 0 4px 0 #ded7be; }
 .panel-heading { justify-content: space-between; gap: 16px; }.panel-heading h2 { margin-top: 5px; }
