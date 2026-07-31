@@ -1,0 +1,148 @@
+import type { User } from '@supabase/supabase-js'
+import type { Player, Position, Team } from '../domain/types'
+import type { RecordedResult } from '../domain/elo'
+import { supabase } from './supabase'
+
+type PlayerRow = {
+  id: string
+  name: string
+  base_rating: number | string
+  learned_rating: number | string
+  elo_seed: number | string
+  preferred_position: Position | null
+  icon: string
+  color: string
+  archived_at: string | null
+}
+
+export type HistoryEntry = { id: string; createdAt: string; outcome: 'team_one' | 'team_two' | 'draw'; goalDifference: number | null }
+type HistoryResult = { outcome: HistoryEntry['outcome']; goal_difference: number | null }
+type HistoryRow = { id: string; created_at: string; match_results: HistoryResult | HistoryResult[] | null }
+
+const client = () => {
+  if (!supabase) throw new Error('Falta configurar Supabase.')
+  return supabase
+}
+
+const fromRow = (row: PlayerRow): Player => ({
+  id: row.id,
+  name: row.name,
+  baseRating: Number(row.base_rating),
+  learnedRating: Number(row.learned_rating),
+  eloSeed: Number(row.elo_seed),
+  preferredPosition: row.preferred_position ?? undefined,
+  icon: row.icon,
+  color: row.color,
+  archived: Boolean(row.archived_at),
+})
+
+export async function ensureRoster(user: User) {
+  const db = client()
+  const membership = await db.from('roster_members').select('roster_id').eq('user_id', user.id).limit(1).maybeSingle()
+  if (membership.error) throw membership.error
+  if (membership.data) return membership.data.roster_id as string
+  const existing = await db.from('rosters').select('id').eq('owner_id', user.id).maybeSingle()
+  if (existing.error) throw existing.error
+  if (existing.data) return existing.data.id as string
+  const created = await db.from('rosters').insert({ owner_id: user.id, name: 'Mi plantel' }).select('id').single()
+  if (created.error) throw created.error
+  return created.data.id as string
+}
+
+export async function isRosterOwner(rosterId: string, userId: string) {
+  const response = await client().from('rosters').select('id').eq('id', rosterId).eq('owner_id', userId).maybeSingle()
+  if (response.error) throw response.error
+  return Boolean(response.data)
+}
+
+export async function createRosterInvitation(rosterId: string) {
+  const response = await client().rpc('create_roster_invitation', { p_roster_id: rosterId })
+  if (response.error) throw response.error
+  const row = (response.data as Array<{ token: string; expires_at: string }>)[0]
+  if (!row) throw new Error('No se pudo crear la invitación.')
+  return row
+}
+
+export async function acceptRosterInvitation(token: string) {
+  const response = await client().rpc('accept_roster_invitation', { p_token: token })
+  if (response.error) throw response.error
+  if (!response.data) throw new Error('No se pudo aceptar la invitación.')
+  return response.data as string
+}
+
+export async function loadPlayers(rosterId: string) {
+  const response = await client().from('players').select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').eq('roster_id', rosterId).order('archived_at', { ascending: true, nullsFirst: true }).order('name')
+  if (response.error) throw response.error
+  return (response.data as PlayerRow[]).map(fromRow)
+}
+
+export async function createPlayer(rosterId: string, player: Omit<Player, 'id' | 'archived'>) {
+  const response = await client().from('players').insert({
+    roster_id: rosterId,
+    name: player.name.trim(),
+    base_rating: player.baseRating,
+    learned_rating: player.learnedRating,
+    elo_seed: player.eloSeed,
+    preferred_position: player.preferredPosition ?? null,
+    icon: player.icon,
+    color: player.color,
+  }).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').single()
+  if (response.error) throw response.error
+  return fromRow(response.data as PlayerRow)
+}
+
+export async function updatePlayer(playerId: string, player: Omit<Player, 'id' | 'archived'>) {
+  const response = await client().from('players').update({
+    name: player.name.trim(),
+    base_rating: player.baseRating,
+    learned_rating: player.learnedRating,
+    elo_seed: player.eloSeed,
+    preferred_position: player.preferredPosition ?? null,
+    icon: player.icon,
+    color: player.color,
+  }).eq('id', playerId).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').single()
+  if (response.error) throw response.error
+  return fromRow(response.data as PlayerRow)
+}
+
+export async function setArchived(playerId: string, archived: boolean) {
+  const response = await client().from('players').update({ archived_at: archived ? new Date().toISOString() : null }).eq('id', playerId)
+  if (response.error) throw response.error
+}
+
+export const toHistoryEntries = (rows: HistoryRow[]): HistoryEntry[] => rows.flatMap((match) => {
+  const result = Array.isArray(match.match_results) ? match.match_results[0] : match.match_results
+  return result ? [{ id: match.id, createdAt: match.created_at, outcome: result.outcome, goalDifference: result.goal_difference }] : []
+})
+
+export async function loadHistory(rosterId: string) {
+  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference)').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).limit(20)
+  if (response.error) throw response.error
+  return toHistoryEntries(response.data as unknown as HistoryRow[])
+}
+
+export async function manageMatchHistory(matchId: string, action: 'edit' | 'delete', outcome?: HistoryEntry['outcome'], goalDifference?: number) {
+  const response = await client().rpc('manage_match_history', {
+    p_match_id: matchId,
+    p_action: action,
+    p_outcome: outcome ?? null,
+    p_goal_difference: goalDifference ?? null,
+  })
+  if (response.error) throw response.error
+}
+
+export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team, unassignedId: string | undefined, result: RecordedResult, updates: Map<string, number>, goalDifference?: number) {
+  const db = client()
+  const match = await db.from('matches').insert({ roster_id: rosterId, team_size: teamOne.players.length, unassigned_player_id: unassignedId ?? null, status: 'completed' }).select('id').single()
+  if (match.error) throw match.error
+  const matchId = match.data.id as string
+  const participants = [...teamOne.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 1, ordinal })), ...teamTwo.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 2, ordinal }))]
+  const participantResult = await db.from('match_participants').insert(participants)
+  if (participantResult.error) throw participantResult.error
+  const resultRow = await db.from('match_results').insert({ match_id: matchId, outcome: result === 'teamOne' ? 'team_one' : result === 'teamTwo' ? 'team_two' : 'draw', goal_difference: goalDifference ?? null })
+  if (resultRow.error) throw resultRow.error
+  const ratingWrites = [...updates.entries()].map(([id, learned_rating]) => db.from('players').update({ learned_rating }).eq('id', id))
+  const settled = await Promise.all(ratingWrites)
+  const failed = settled.find((entry) => entry.error)
+  if (failed?.error) throw failed.error
+}

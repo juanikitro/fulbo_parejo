@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest'
+import { toHistoryEntries } from './repository'
+
+describe('toHistoryEntries', () => {
+  it('keeps a completed match when Supabase embeds its one-to-one result as an object', () => {
+    expect(toHistoryEntries([{
+      id: 'match-1',
+      created_at: '2026-07-31T12:00:00.000Z',
+      match_results: { outcome: 'team_one', goal_difference: 2 },
+    }])).toEqual([{
+      id: 'match-1',
+      createdAt: '2026-07-31T12:00:00.000Z',
+      outcome: 'team_one',
+      goalDifference: 2,
+    }])
+  })
+})
