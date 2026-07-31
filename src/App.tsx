@@ -3,6 +3,7 @@ import { applyEloResult, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { operationalRating, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
+import { formatMatchShareText } from './lib/matchShare'
 import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry } from './lib/repository'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
@@ -75,16 +76,18 @@ function downloadJson(players: Player[]) {
 }
 
 async function shareMatch(teamOne: Team, teamTwo: Team) {
-  const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1080
+  const rosterHeight = Math.max(teamOne.players.length, teamTwo.players.length) * 36
+  const pitchTop = 260 + rosterHeight
+  const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = pitchTop + 760
   const context = canvas.getContext('2d')!
-  context.fillStyle = '#102e22'; context.fillRect(0, 0, 1080, 1080)
+  context.fillStyle = '#102e22'; context.fillRect(0, 0, canvas.width, canvas.height)
   context.fillStyle = '#fff5d6'; context.font = '900 58px Archivo Black, system-ui'; context.textAlign = 'center'; context.fillText('PARTIDO ARMADO', 540, 94)
   const drawPitch = (team: Team, left: number, accent: string) => {
-    const top = 210; const size = 400
+    const top = pitchTop; const size = 400
     context.fillStyle = '#20744b'; context.fillRect(left, top, size, 690)
     context.fillStyle = '#1a6741'; for (let stripe = 0; stripe < 8; stripe += 2) context.fillRect(left + stripe * 50, top, 50, 690)
     context.strokeStyle = '#d9f2c3'; context.lineWidth = 7; context.strokeRect(left + 8, top + 8, size - 16, 674); context.beginPath(); context.moveTo(left, top + 345); context.lineTo(left + size, top + 345); context.stroke(); context.beginPath(); context.arc(left + 200, top + 345, 60, 0, Math.PI * 2); context.stroke()
-    context.fillStyle = accent; context.fillRect(left, 132, size, 54); context.fillStyle = '#172018'; context.font = '900 28px Manrope, system-ui'; context.fillText(`${team.name} · ${fmt(team.operationalRating / team.players.length)}`, left + 200, 169)
+    context.fillStyle = accent; context.fillRect(left, pitchTop - 78, size, 54); context.fillStyle = '#172018'; context.font = '900 28px Manrope, system-ui'; context.fillText(`${team.name} · ${fmt(team.operationalRating / team.players.length)}`, left + 200, pitchTop - 41)
     const players = [...team.players].sort((a, b) => (a.preferredPosition === 'goalkeeper' ? -1 : 0) - (b.preferredPosition === 'goalkeeper' ? -1 : 0))
     players.forEach((player) => {
       const row = player.preferredPosition === 'goalkeeper' ? 90 : player.preferredPosition === 'defender' ? 68 : player.preferredPosition === 'midfielder' ? 46 : 24
@@ -96,10 +99,16 @@ async function shareMatch(teamOne: Team, teamTwo: Team) {
       context.fillStyle = '#fffbed'; context.font = '800 16px Manrope, system-ui'; context.fillText(player.name, x, y - 39)
     })
   }
+  const drawRoster = (team: Team, left: number) => {
+    context.textAlign = 'left'; context.fillStyle = '#fff5d6'; context.font = '800 26px Manrope, system-ui'
+    team.players.forEach((player, index) => context.fillText(`• ${player.name}`, left, 164 + index * 36))
+    context.textAlign = 'center'
+  }
+  drawRoster(teamOne, 70); drawRoster(teamTwo, 610)
   drawPitch(teamOne, 70, '#ffb36e'); drawPitch(teamTwo, 610, '#9dc4ff')
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  const text = `${teamOne.name}\n${teamOne.players.map((player) => `• ${player.name}`).join('\n')}\n\nVS\n\n${teamTwo.name}\n${teamTwo.players.map((player) => `• ${player.name}`).join('\n')}`
-  if (blob && navigator.canShare?.({ files: [new File([blob], 'partido.png', { type: 'image/png' })] })) { await navigator.share({ title: 'Partido armado', text, files: [new File([blob], 'partido.png', { type: 'image/png' })] }); return }
+  const text = formatMatchShareText(teamOne, teamTwo)
+  if (blob && navigator.canShare?.({ files: [new File([blob], 'partido.png', { type: 'image/png' })] })) { await navigator.share({ title: 'Partido armado', files: [new File([blob], 'partido.png', { type: 'image/png' })] }); return }
   await navigator.clipboard?.writeText(text)
   if (blob) { const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'partido.png'; anchor.click(); URL.revokeObjectURL(url) }
 }
