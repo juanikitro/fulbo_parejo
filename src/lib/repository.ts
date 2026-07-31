@@ -126,10 +126,24 @@ export const toHistoryEntries = (rows: HistoryRow[]): HistoryEntry[] => rows.fla
   return result ? [{ id: match.id, createdAt: match.created_at, outcome: result.outcome, goalDifference: result.goal_difference, playerOffsets }] : []
 })
 
+export const latestPlayerOffsets = (history: HistoryEntry[]) => {
+  const offsets = new Map<string, number>()
+  for (const entry of history) for (const player of entry.playerOffsets) {
+    if (!offsets.has(player.playerId)) offsets.set(player.playerId, player.offset)
+  }
+  return offsets
+}
+
 export async function loadHistory(rosterId: string) {
   const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).limit(20)
   if (response.error) throw response.error
   return toHistoryEntries(response.data as unknown as HistoryRow[])
+}
+
+export async function loadLatestPlayerOffsets(rosterId: string) {
+  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).order('id', { ascending: false })
+  if (response.error) throw response.error
+  return latestPlayerOffsets(toHistoryEntries(response.data as unknown as HistoryRow[]))
 }
 
 export async function manageMatchHistory(matchId: string, action: 'edit' | 'delete', outcome?: HistoryEntry['outcome'], goalDifference?: number) {

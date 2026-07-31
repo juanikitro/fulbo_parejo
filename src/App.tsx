@@ -4,12 +4,18 @@ import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { operationalRating, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
-import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry } from './lib/repository'
+import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadLatestPlayerOffsets, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry } from './lib/repository'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
 type Tab = 'squad' | 'match' | 'history'
 const fmt = (value: number) => value.toFixed(2)
 const blankDraft = { name: '', baseRating: '6', preferredPosition: '', icon: playerIcons[0], color: playerColors[0] }
+
+function OffsetIndicator({ offset }: { offset: number | undefined }) {
+  if (!offset) return null
+  const positive = offset > 0
+  return <small className={`rating-offset ${positive ? 'positive-offset' : 'negative-offset'}`} aria-label={`${positive ? 'Subió' : 'Bajó'} ${Math.abs(offset).toFixed(2)} puntos`}>{positive ? '↑' : '↓'} {positive ? '+' : ''}{fmt(offset)}</small>
+}
 
 function PlayerEditor({
   draft,
@@ -121,6 +127,7 @@ export default function App() {
   const [rosterId, setRosterId] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
   const [players, setPlayers] = useState<Player[]>([])
+  const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [proposal, setProposal] = useState<MatchProposal | null>(null)
   const [balancedProposal, setBalancedProposal] = useState<MatchProposal | null>(null)
@@ -157,10 +164,10 @@ export default function App() {
         if (!auth.user) return
         const token = new URLSearchParams(window.location.search).get('invite')
         const id = token ? await acceptRosterInvitation(token) : await ensureRoster(auth.user)
-        const [loadedPlayers, loadedHistory] = await Promise.all([loadPlayers(id), loadHistory(id)])
+        const [loadedPlayers, loadedHistory, loadedOffsets] = await Promise.all([loadPlayers(id), loadHistory(id), loadLatestPlayerOffsets(id)])
         const owner = await isRosterOwner(id, auth.user.id)
         if (token) window.history.replaceState({}, '', window.location.pathname)
-        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setSelected(new Set(loadedPlayers.filter((player) => !player.archived).map((player) => player.id))); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
+        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setSelected(new Set(loadedPlayers.filter((player) => !player.archived).map((player) => player.id))); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
     }
     void load()
@@ -241,7 +248,8 @@ export default function App() {
       const updates = applyEloResult(proposal.teamOne.players, proposal.teamTwo.players, result, margin)
       await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, updates, margin)
       setPlayers((current) => current.map((player) => ({ ...player, learnedRating: updates.get(player.id) ?? player.learnedRating })))
-      setHistory(await loadHistory(rosterId)); setGoalDifference(''); setPendingResult(null); setMessage('Resultado guardado y medias actualizadas.')
+      const [updatedHistory, updatedOffsets] = await Promise.all([loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
+      setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setGoalDifference(''); setPendingResult(null); setMessage('Resultado guardado y medias actualizadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
@@ -251,8 +259,8 @@ export default function App() {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
       await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin)
-      const [updatedPlayers, updatedHistory] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
+      const [updatedPlayers, updatedHistory, updatedOffsets] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
@@ -260,8 +268,8 @@ export default function App() {
     setSaving(true)
     try {
       await manageMatchHistory(entry.id, 'delete')
-      const [updatedPlayers, updatedHistory] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); setMessage('Partido borrado y medias recalculadas.')
+      const [updatedPlayers, updatedHistory, updatedOffsets] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setMessage('Partido borrado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo borrar el partido.') } finally { setSaving(false) }
   }
   const logout = async () => {
@@ -286,9 +294,9 @@ export default function App() {
   return <main className="app-shell">
     <header className="topbar"><h1>Fulbo Parejo</h1><div className="header-actions">{isOwner && <button className="invite-button" disabled={saving} onClick={() => void invite()}>Invitar 🔗</button>}<button className="logout-button" disabled={saving} onClick={() => void logout()}>Salir ↗</button></div></header>
     {message && <p className="demo-banner">{message} <button onClick={() => setMessage(null)}>×</button></p>}
-    {tab === 'squad' && <section className="panel"><div className="panel-heading"><div><p className="eyebrow">TU PLANTEL</p><h2>{active.length} jugadores activos</h2></div><button onClick={() => openPlayerEditor()}>+ Crear jugador</button></div><div className="squad-grid">{active.map((player) => <article className="player-card" key={player.id}><span className="player-icon" style={{ backgroundColor: player.color }}>{player.icon}</span><div><strong>{player.name}</strong><small>{player.preferredPosition ? positionLabel[player.preferredPosition] : 'Sin posición'}</small></div><b>{player.baseRating} <small>({fmt(player.learnedRating)})</small></b><div className="player-actions"><button aria-label={`Editar ${player.name}`} onClick={() => openPlayerEditor(player)}>✏️</button><button aria-label={`Archivar ${player.name}`} onClick={() => void archive(player)}>🗃️</button></div></article>)}</div><div className="roster-export"><p className="muted">Respaldo manual del plantel.</p><button className="export-button" onClick={() => downloadJson(players)}>↓ Exportar JSON</button></div></section>}
+    {tab === 'squad' && <section className="panel"><div className="panel-heading"><div><p className="eyebrow">TU PLANTEL</p><h2>{active.length} jugadores activos</h2></div><button onClick={() => openPlayerEditor()}>+ Crear jugador</button></div><div className="squad-grid">{active.map((player) => <article className="player-card" key={player.id}><span className="player-icon" style={{ backgroundColor: player.color }}>{player.icon}</span><div><strong>{player.name}</strong><small>{player.preferredPosition ? positionLabel[player.preferredPosition] : 'Sin posición'}</small></div><b>{player.baseRating} <small>({fmt(player.learnedRating)})</small></b><OffsetIndicator offset={latestOffsets.get(player.id)} /><div className="player-actions"><button aria-label={`Editar ${player.name}`} onClick={() => openPlayerEditor(player)}>✏️</button><button aria-label={`Archivar ${player.name}`} onClick={() => void archive(player)}>🗃️</button></div></article>)}</div><div className="roster-export"><p className="muted">Respaldo manual del plantel.</p><button className="export-button" onClick={() => downloadJson(players)}>↓ Exportar JSON</button></div></section>}
     {tab === 'match' && <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="chip-list">{active.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
-      {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <button className="team-player" key={player.id} onClick={() => swapComparable(player.id, 'teamOne')}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}<small>{fmt(operationalRating(player))}</small></button>)}</div><div className="vs">VS <small>Δ {fmt(proposal.balanceGap)}</small></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <button className="team-player" key={player.id} onClick={() => swapComparable(player.id, 'teamTwo')}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}<small>{fmt(operationalRating(player))}</small></button>)}</div></section>{proposal.unassigned && <p className="unassigned">No asignado para maximizar equilibrio: <strong>{proposal.unassigned.name}</strong></p>}<section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => setPendingResult('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => setPendingResult('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => setPendingResult('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>}
+      {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <button className="team-player" key={player.id} onClick={() => swapComparable(player.id, 'teamOne')}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}<span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span></button>)}</div><div className="vs">VS <small>Δ {fmt(proposal.balanceGap)}</small></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <button className="team-player" key={player.id} onClick={() => swapComparable(player.id, 'teamTwo')}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}<span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span></button>)}</div></section>{proposal.unassigned && <p className="unassigned">No asignado para maximizar equilibrio: <strong>{proposal.unassigned.name}</strong></p>}<section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => setPendingResult('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => setPendingResult('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => setPendingResult('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>}
     {tab === 'history' && <section className="panel"><p className="eyebrow">HISTORIAL</p><h2>Últimos partidos</h2>{history.length ? <ol className="history">{history.map((entry) => <li key={entry.id}><div><span>{new Date(entry.createdAt).toLocaleDateString('es-AR')} · {entry.outcome === 'draw' ? 'Empate' : entry.outcome === 'team_one' ? 'Ganó Claro' : 'Ganó Oscuro'}{entry.goalDifference !== null ? ` · Δ ${entry.goalDifference}` : ''}</span><div className="player-offsets">{entry.playerOffsets.map(({ playerId, playerName, offset }) => <small className={offset > 0 ? 'positive-offset' : offset < 0 ? 'negative-offset' : ''} key={playerId}>{playerName} {offset > 0 ? '+' : ''}{fmt(offset)}</small>)}</div></div><div className="history-actions"><button disabled={saving} onClick={() => openHistoryEditor(entry)}>✏️</button><button disabled={saving} onClick={() => void deleteHistoryEntry(entry)}>🗑️</button></div></li>)}</ol> : <p className="muted">Todavía no registraste resultados.</p>}</section>}
     {editorOpen && <PlayerEditor draft={draft} editingPlayer={editingPlayer} saving={saving} onClose={() => setEditorOpen(false)} onSubmit={(event) => void savePlayer(event)} onChange={setDraft} />}
     {pendingResult && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onSave={() => void record(pendingResult)} />}

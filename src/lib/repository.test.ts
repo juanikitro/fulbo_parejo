@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toHistoryEntries } from './repository'
+import { latestPlayerOffsets, toHistoryEntries, type HistoryEntry } from './repository'
 
 describe('toHistoryEntries', () => {
   it('keeps a completed match when Supabase embeds its one-to-one result as an object', () => {
@@ -30,5 +30,14 @@ describe('toHistoryEntries', () => {
       goalDifference: null,
       playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: -0.18 }],
     }])
+  })
+
+  it('uses each player’s most recent match offset', () => {
+    const history: HistoryEntry[] = [
+      { id: 'new', createdAt: '2026-07-31T13:00:00.000Z', outcome: 'team_one', goalDifference: null, playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: 0.18 }] },
+      { id: 'old', createdAt: '2026-07-30T13:00:00.000Z', outcome: 'team_two', goalDifference: null, playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: -0.12 }, { playerId: 'juan', playerName: 'Juan', offset: -0.12 }] },
+    ]
+
+    expect(latestPlayerOffsets(history)).toEqual(new Map([['nico', 0.18], ['juan', -0.12]]))
   })
 })
