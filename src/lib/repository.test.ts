@@ -7,11 +7,28 @@ describe('toHistoryEntries', () => {
       id: 'match-1',
       created_at: '2026-07-31T12:00:00.000Z',
       match_results: { outcome: 'team_one', goal_difference: 2 },
+      match_participants: [],
     }])).toEqual([{
       id: 'match-1',
       createdAt: '2026-07-31T12:00:00.000Z',
       outcome: 'team_one',
       goalDifference: 2,
+      playerOffsets: [],
+    }])
+  })
+
+  it('keeps each player Elo offset from the match history', () => {
+    expect(toHistoryEntries([{
+      id: 'match-2',
+      created_at: '2026-07-31T13:00:00.000Z',
+      match_results: { outcome: 'team_two', goal_difference: null },
+      match_participants: [{ rating_offset: '-0.18', players: { id: 'nico', name: 'Nico' } }],
+    }] as unknown as Parameters<typeof toHistoryEntries>[0])).toEqual([{
+      id: 'match-2',
+      createdAt: '2026-07-31T13:00:00.000Z',
+      outcome: 'team_two',
+      goalDifference: null,
+      playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: -0.18 }],
     }])
   })
 })

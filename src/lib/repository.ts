@@ -15,9 +15,16 @@ type PlayerRow = {
   archived_at: string | null
 }
 
-export type HistoryEntry = { id: string; createdAt: string; outcome: 'team_one' | 'team_two' | 'draw'; goalDifference: number | null }
+export type HistoryEntry = {
+  id: string
+  createdAt: string
+  outcome: 'team_one' | 'team_two' | 'draw'
+  goalDifference: number | null
+  playerOffsets: { playerId: string; playerName: string; offset: number }[]
+}
 type HistoryResult = { outcome: HistoryEntry['outcome']; goal_difference: number | null }
-type HistoryRow = { id: string; created_at: string; match_results: HistoryResult | HistoryResult[] | null }
+type HistoryParticipant = { rating_offset: number | string; players: { id: string; name: string } | { id: string; name: string }[] | null }
+type HistoryRow = { id: string; created_at: string; match_results: HistoryResult | HistoryResult[] | null; match_participants: HistoryParticipant[] | null }
 
 const client = () => {
   if (!supabase) throw new Error('Falta configurar Supabase.')
@@ -112,11 +119,15 @@ export async function setArchived(playerId: string, archived: boolean) {
 
 export const toHistoryEntries = (rows: HistoryRow[]): HistoryEntry[] => rows.flatMap((match) => {
   const result = Array.isArray(match.match_results) ? match.match_results[0] : match.match_results
-  return result ? [{ id: match.id, createdAt: match.created_at, outcome: result.outcome, goalDifference: result.goal_difference }] : []
+  const playerOffsets = (match.match_participants ?? []).flatMap((participant) => {
+    const player = Array.isArray(participant.players) ? participant.players[0] : participant.players
+    return player ? [{ playerId: player.id, playerName: player.name, offset: Number(participant.rating_offset) }] : []
+  })
+  return result ? [{ id: match.id, createdAt: match.created_at, outcome: result.outcome, goalDifference: result.goal_difference, playerOffsets }] : []
 })
 
 export async function loadHistory(rosterId: string) {
-  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference)').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).limit(20)
+  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).limit(20)
   if (response.error) throw response.error
   return toHistoryEntries(response.data as unknown as HistoryRow[])
 }
@@ -136,7 +147,7 @@ export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team
   const match = await db.from('matches').insert({ roster_id: rosterId, team_size: teamOne.players.length, unassigned_player_id: unassignedId ?? null, status: 'completed' }).select('id').single()
   if (match.error) throw match.error
   const matchId = match.data.id as string
-  const participants = [...teamOne.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 1, ordinal })), ...teamTwo.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 2, ordinal }))]
+  const participants = [...teamOne.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 1, ordinal, rating_offset: updates.get(player.id)! - player.learnedRating })), ...teamTwo.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 2, ordinal, rating_offset: updates.get(player.id)! - player.learnedRating }))]
   const participantResult = await db.from('match_participants').insert(participants)
   if (participantResult.error) throw participantResult.error
   const resultRow = await db.from('match_results').insert({ match_id: matchId, outcome: result === 'teamOne' ? 'team_one' : result === 'teamTwo' ? 'team_two' : 'draw', goal_difference: goalDifference ?? null })
