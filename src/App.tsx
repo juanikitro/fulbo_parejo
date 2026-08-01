@@ -5,6 +5,7 @@ import { operationalRating, type MatchProposal, type Player, type Position, type
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
 import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadLatestPlayerOffsets, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry } from './lib/repository'
+import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
 type Tab = 'squad' | 'match' | 'history'
@@ -155,6 +156,11 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const error = authErrorMessage()
+    if (error) setMessage(`No se pudo iniciar sesión: ${error}`)
+  }, [])
+
+  useEffect(() => {
     const db = supabase
     if (!db || !userId) return
     let live = true
@@ -275,6 +281,9 @@ export default function App() {
     setSaving(true)
     try { await signOut() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo cerrar sesión.') } finally { setSaving(false) }
   }
+  const login = async () => {
+    try { await signInWithGoogle() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo iniciar sesión.') }
+  }
   const invite = async () => {
     if (!rosterId) return
     setSaving(true)
@@ -288,7 +297,7 @@ export default function App() {
 
   if (!configured) return <main className="app-shell"><header className="topbar"><h1>Fulbo Parejo</h1></header><section className="panel"><p className="eyebrow">CONFIGURACIÓN PENDIENTE</p><h2>Conectá Supabase para usar tu plantel privado.</h2><p className="muted">Faltan las variables públicas de Supabase en este entorno.</p></section></main>
   if (!sessionReady) return <main className="app-shell"><section className="panel"><h2>Cargando tu vestuario…</h2></section></main>
-  if (!userId) return <main className="app-shell login-shell"><header className="topbar"><h1>Fulbo Parejo</h1></header><section className="panel login-panel"><p className="eyebrow">PLANTEL PRIVADO</p><h2>Tu convocatoria empieza acá.</h2><p className="muted">Entrá con tu cuenta para guardar medias, resultados y tu plantel.</p><button className="google-login" onClick={() => void signInWithGoogle(window.location.href)}><span>G</span>Continuar con Google <b>→</b></button></section></main>
+  if (!userId) return <main className="app-shell login-shell"><header className="topbar"><h1>Fulbo Parejo</h1></header><section className="panel login-panel"><p className="eyebrow">PLANTEL PRIVADO</p><h2>Tu convocatoria empieza acá.</h2><p className="muted">Entrá con tu cuenta para guardar medias, resultados y tu plantel.</p>{message && <p className="demo-banner">{message} <button onClick={() => setMessage(null)}>×</button></p>}<button className="google-login" onClick={() => void login()}><span>G</span>Continuar con Google <b>→</b></button></section></main>
 
   return <main className="app-shell">
     <header className="topbar"><h1>Fulbo Parejo</h1><div className="header-actions">{isOwner && <button className="invite-button" disabled={saving} onClick={() => void invite()}>Invitar 🔗</button>}<button className="logout-button" disabled={saving} onClick={() => void logout()}>Salir ↗</button></div></header>
