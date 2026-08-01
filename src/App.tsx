@@ -167,7 +167,7 @@ export default function App() {
         const [loadedPlayers, loadedHistory, loadedOffsets] = await Promise.all([loadPlayers(id), loadHistory(id), loadLatestPlayerOffsets(id)])
         const owner = await isRosterOwner(id, auth.user.id)
         if (token) window.history.replaceState({}, '', window.location.pathname)
-        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setSelected(new Set(loadedPlayers.filter((player) => !player.archived).map((player) => player.id))); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
+        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setSelected(new Set()); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
     }
     void load()
@@ -231,7 +231,6 @@ export default function App() {
       const attributes = { name: draft.name, baseRating: rating, learnedRating: editingPlayer?.learnedRating ?? rating, eloSeed: editingPlayer?.eloSeed ?? rating, preferredPosition: (draft.preferredPosition || undefined) as Position | undefined, icon: draft.icon, color: draft.color }
       const player = editingPlayer ? await updatePlayer(editingPlayer.id, attributes) : await createPlayer(rosterId, attributes)
       setPlayers((current) => editingPlayer ? current.map((entry) => entry.id === player.id ? player : entry) : [...current, player])
-      if (!editingPlayer) setSelected((current) => new Set(current).add(player.id))
       setEditorOpen(false); setEditingPlayer(null); setDraft(blankDraft)
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar el jugador.') } finally { setSaving(false) }
   }
