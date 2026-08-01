@@ -5,7 +5,11 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 export const supabase = url && key ? createClient(url, key) : null
 
-export async function signInWithGoogle(redirectTo = window.location.origin) {
+export function authRedirectUrl(configuredUrl: string | undefined, currentOrigin = window.location.origin) {
+  return configuredUrl?.trim() || currentOrigin
+}
+
+export async function signInWithGoogle(redirectTo = authRedirectUrl(import.meta.env.VITE_SITE_URL)) {
   if (!supabase) throw new Error('Falta configurar Supabase.')
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
