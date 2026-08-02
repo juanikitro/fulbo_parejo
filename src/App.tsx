@@ -215,6 +215,7 @@ export default function App() {
   const [playerHistoryLoading, setPlayerHistoryLoading] = useState(false)
   const [playerHistoryError, setPlayerHistoryError] = useState<string | null>(null)
   const detailRequest = useRef(0)
+  const authenticatedUserId = useRef<string | null>(null)
   const [ratingInfoOpen, setRatingInfoOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -243,7 +244,13 @@ export default function App() {
     const db = supabase
     if (!db) return
     let live = true
-    const sync = (id: string | null) => { if (live) { setUserId(id); setRosterLoading(Boolean(id)); setSessionReady(true) } }
+    const sync = (id: string | null) => {
+      if (!live) return
+      if (authenticatedUserId.current !== id) setRosterLoading(Boolean(id))
+      authenticatedUserId.current = id
+      setUserId(id)
+      setSessionReady(true)
+    }
     db.auth.getSession().then(({ data }) => sync(data.session?.user.id ?? null))
     const { data: listener } = db.auth.onAuthStateChange((_event, session) => sync(session?.user.id ?? null))
     return () => { live = false; listener.subscription.unsubscribe() }
