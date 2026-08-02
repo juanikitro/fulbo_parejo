@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import type { ChemistryMatch } from '../domain/chemistry'
 import type { Player, Position, Team } from '../domain/types'
-import type { PerformanceRating, RecordedResult } from '../domain/elo'
+import type { PerformanceRating, RatingScale, RecordedResult } from '../domain/elo'
 import { supabase } from './supabase'
 
 type PlayerRow = {
@@ -202,9 +202,9 @@ export async function manageMatchHistory(matchId: string, action: 'edit' | 'dele
   if (response.error) throw response.error
 }
 
-export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team, unassignedId: string | undefined, result: RecordedResult, updates: Map<string, number>, goalDifference?: number, performanceRatings: ReadonlyMap<string, PerformanceRating> = new Map()) {
+export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team, unassignedId: string | undefined, result: RecordedResult, updates: Map<string, number>, ratingScale: RatingScale, goalDifference?: number, performanceRatings: ReadonlyMap<string, PerformanceRating> = new Map()) {
   const db = client()
-  const match = await db.from('matches').insert({ roster_id: rosterId, team_size: teamOne.players.length, unassigned_player_id: unassignedId ?? null, status: 'completed' }).select('id').single()
+  const match = await db.from('matches').insert({ roster_id: rosterId, team_size: teamOne.players.length, unassigned_player_id: unassignedId ?? null, rating_scale: ratingScale, status: 'completed' }).select('id').single()
   if (match.error) throw match.error
   const matchId = match.data.id as string
   const participants = [...teamOne.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 1, ordinal, rating_offset: updates.get(player.id)! - player.learnedRating, performance_rating: performanceRatings.get(player.id) ?? 0 })), ...teamTwo.players.map((player, ordinal) => ({ match_id: matchId, player_id: player.id, team: 2, ordinal, rating_offset: updates.get(player.id)! - player.learnedRating, performance_rating: performanceRatings.get(player.id) ?? 0 }))]

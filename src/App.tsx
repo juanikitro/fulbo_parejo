@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { chemistryFromHistory, type PairChemistry } from './domain/chemistry'
-import { applyEloResult, performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
+import { applyEloResult, inferRatingScale, performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { isGoalkeeper, operationalRating, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
@@ -387,8 +387,9 @@ export default function App() {
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
-      const updates = applyEloResult(proposal.teamOne.players, proposal.teamTwo.players, result, margin, performanceRatings)
-      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, updates, margin, performanceRatings)
+      const ratingScale = inferRatingScale(active)
+      const updates = applyEloResult(proposal.teamOne.players, proposal.teamTwo.players, result, margin, performanceRatings, ratingScale)
+      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, updates, ratingScale, margin, performanceRatings)
       setPlayers((current) => current.map((player) => ({ ...player, learnedRating: updates.get(player.id) ?? player.learnedRating })))
       const [updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
       setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); closeResultEditor(); setMessage('Resultado guardado y medias actualizadas.')
