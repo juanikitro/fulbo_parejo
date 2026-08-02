@@ -125,12 +125,12 @@ Uno de los dos grupos del mismo tamaño que disputan un partido; ese tamaño se 
 _Avoid_: Lado, grupo
 
 **Posición preferida**:
-Rol de juego que un Jugador prefiere ocupar: Arquero, Defensor, Mediocampista o Delantero. Guía secundariamente el Matchmaking para evitar distribuciones extremas, sin prevalecer sobre el equilibrio de fuerza.
+Rol de juego que un Jugador prefiere ocupar: PO, DFI, DFC, DFD, MC, MD, MI, DC, EI o ED. Guía secundariamente el Matchmaking por línea y puesto específico, sin prevalecer sobre el equilibrio de fuerza.
 _Avoid_: Puesto fijo, formación obligatoria
 
-**Arquero**:
-Jugador cuya Posición preferida es custodiar el arco. Si hay al menos dos disponibles, cada Equipo debe tener exactamente uno.
-_Avoid_: Portero, goalkeeper
+**Portero**:
+Jugador cuya Posición preferida es PO y custodia el arco. Si hay al menos dos disponibles, cada Equipo debe tener exactamente uno.
+_Avoid_: Arquero, goalkeeper
 
 **Compensación por arquero**:
 Ventaja adicional de fuerza asignada al Equipo que no recibe el único Arquero disponible para equilibrar su desventaja deportiva.
