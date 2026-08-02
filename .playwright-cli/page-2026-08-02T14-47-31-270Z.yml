@@ -1,0 +1,50 @@
+- region "Registrar partido" [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - paragraph [ref=f1e5]: 3 · RESULTADO
+      - heading "Registrar partido" [level=2] [ref=f1e6]
+    - button "Cerrar" [ref=f1e7] [cursor=pointer]: ×
+  - paragraph [ref=f1e8]: Ganó Claro
+  - generic [ref=f1e9]:
+    - text: 🥅 Diferencia de goles
+    - generic [ref=f1e10]: opcional
+    - spinbutton "🥅 Diferencia de goles opcional" [ref=f1e11]
+  - group "⭐ ¿Cómo jugó cada uno?" [ref=f1e12]:
+    - paragraph [ref=f1e14]: Normal está seleccionado por defecto.
+    - generic [ref=f1e15]:
+      - generic [ref=f1e16]:
+        - generic [ref=f1e17]: ⚽
+        - generic [ref=f1e18]:
+          - strong [ref=f1e19]: Juan
+          - generic [ref=f1e20]: Normal
+        - generic [ref=f1e21]:
+          - button "Muy mal" [ref=f1e22] [cursor=pointer]
+          - button "Mal" [ref=f1e23] [cursor=pointer]
+          - button "Normal" [ref=f1e24] [cursor=pointer]
+          - button "Bien" [ref=f1e25] [cursor=pointer]
+          - button "Muy bien" [ref=f1e26] [cursor=pointer]
+      - generic [ref=f1e27]:
+        - generic [ref=f1e28]: 🧤
+        - generic [ref=f1e29]:
+          - strong [ref=f1e30]: Mateo
+          - generic [ref=f1e31]: Normal
+        - generic [ref=f1e32]:
+          - button "Muy mal" [ref=f1e33] [cursor=pointer]
+          - button "Mal" [ref=f1e34] [cursor=pointer]
+          - button "Normal" [ref=f1e35] [cursor=pointer]
+          - button "Bien" [ref=f1e36] [cursor=pointer]
+          - button "Muy bien" [ref=f1e37] [cursor=pointer]
+      - generic [ref=f1e38]:
+        - generic [ref=f1e39]: 🦿
+        - generic [ref=f1e40]:
+          - strong [ref=f1e41]: Fede
+          - generic [ref=f1e42]: Normal
+        - generic [ref=f1e43]:
+          - button "Muy mal" [ref=f1e44] [cursor=pointer]
+          - button "Mal" [ref=f1e45] [cursor=pointer]
+          - button "Normal" [ref=f1e46] [cursor=pointer]
+          - button "Bien" [ref=f1e47] [cursor=pointer]
+          - button "Muy bien" [ref=f1e48] [cursor=pointer]
+  - generic [ref=f1e49]:
+    - button "Cancelar" [ref=f1e50] [cursor=pointer]
+    - button "Guardar resultado ✓" [ref=f1e51] [cursor=pointer]
