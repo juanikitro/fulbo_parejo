@@ -14,6 +14,7 @@ type ThemePreference = 'system' | 'light' | 'dark'
 const themeStorageKey = 'fulbo-parejo-theme-preference'
 const fmt = (value: number) => value.toFixed(2)
 const blankDraft = { name: '', baseRating: '6', preferredPosition: '', icon: playerIcons[0], color: playerColors[0] }
+const performanceSymbols: Record<PerformanceRating, string> = { '-2': '↓', '-1': '↘', 0: '−', 1: '↗', 2: '↑' }
 
 function loadThemePreference(): ThemePreference {
   try {
