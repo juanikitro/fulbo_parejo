@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { chemistryFromHistory } from './chemistry'
 import { createMatchProposal, findComparableSwap } from './matchmaking'
 import type { Player } from './types'
 
@@ -67,5 +68,22 @@ describe('createMatchProposal', () => {
     ])
 
     expect(candidate?.id).toBe('left-back')
+  })
+
+  it('keeps positive pairs together and separates negative pairs when ratings are equal', () => {
+    const chemistry = chemistryFromHistory([
+      ...Array.from({ length: 4 }, () => ({ outcome: 'team_one' as const, teams: [['ana', 'bea'], ['other-one', 'other-two']] as const })),
+      ...Array.from({ length: 4 }, () => ({ outcome: 'team_two' as const, teams: [['other-one', 'other-two'], ['cami', 'dani']] as const })),
+      ...Array.from({ length: 4 }, () => ({ outcome: 'team_two' as const, teams: [['ana', 'cami'], ['other-one', 'other-two']] as const })),
+      ...Array.from({ length: 4 }, () => ({ outcome: 'team_one' as const, teams: [['other-one', 'other-two'], ['bea', 'dani']] as const })),
+    ])
+
+    const proposal = createMatchProposal(['ana', 'bea', 'cami', 'dani'].map((id) => makePlayer(id, 7)), chemistry)
+    const teams = [proposal.teamOne.players, proposal.teamTwo.players].map((team) => team.map((player) => player.id))
+
+    expect(teams).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['ana', 'bea']),
+      expect.arrayContaining(['cami', 'dani']),
+    ]))
   })
 })

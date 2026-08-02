@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { chemistryFromHistory, type PairChemistry } from './domain/chemistry'
 import { applyEloResult, performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { isGoalkeeper, operationalRating, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
-import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry } from './lib/repository'
+import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
@@ -120,6 +121,7 @@ function RatingInfo({ onClose }: { onClose: () => void }) {
         <section><h3>La media que usa la app</h3><p><strong>Media base:</strong> la que cargás manualmente para cada jugador. <strong>Media aprendida:</strong> la que se actualiza después de cada partido.</p><p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p><p className="rating-formula">40% media base + 60% media aprendida</p></section>
         <section><h3>Cómo funciona el Elo</h3><p>Antes del partido se comparan las medias operativas promedio de ambos equipos. Ganarle a un equipo que era favorito suma más; perder contra uno más fuerte resta menos.</p><p>El empate también modifica las medias: el equipo que llegaba como menos favorito puede subir y el favorito bajar.</p><p><strong>Diferencia de goles:</strong> una victoria más amplia aumenta el cambio de Elo de forma gradual, con un tope para que una goleada no descontrole las medias.</p></section>
         <section><h3>Cómo jugó cada uno</h3><p>Al registrar el resultado, la valoración individual ajusta solamente el cambio de Elo de ese jugador en ese partido.</p><ul className="performance-explanation"><li><strong>Muy mal:</strong> 50% de lo que suma o 150% de lo que resta.</li><li><strong>Mal:</strong> 75% de lo que suma o 125% de lo que resta.</li><li><strong>Normal:</strong> 100% del cambio.</li><li><strong>Bien:</strong> 125% de lo que suma o 75% de lo que resta.</li><li><strong>Muy bien:</strong> 150% de lo que suma o 50% de lo que resta.</li></ul><p>Por eso, jugar <strong>muy bien</strong> potencia una victoria y amortigua una derrota; jugar <strong>muy mal</strong> hace lo contrario.</p></section>
+        <section><h3>Química de los equipos</h3><p>La app aprende qué jugadores rinden mejor juntos según los partidos que compartieron en el mismo equipo.</p><p>Una victoria suma química, un empate suma menos y una derrota resta. Cuantos más partidos compartan, más confiable será esa señal.</p><p>Al armar equipos, la química sólo ajusta de forma gradual el equilibrio de medias y posiciones: busca juntar duplas que funcionan y separar las que vienen rindiendo peor.</p></section>
       </div>
       <button type="button" className="save-player" onClick={onClose}>Entendido</button>
     </section>
@@ -200,6 +202,7 @@ export default function App() {
   const [isOwner, setIsOwner] = useState(false)
   const [players, setPlayers] = useState<Player[]>([])
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
+  const [chemistry, setChemistry] = useState<PairChemistry>(new Map())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [proposal, setProposal] = useState<MatchProposal | null>(null)
   const [balancedProposal, setBalancedProposal] = useState<MatchProposal | null>(null)
@@ -282,10 +285,10 @@ export default function App() {
         if (!auth.user) return
         const token = new URLSearchParams(window.location.search).get('invite')
         const id = token ? await acceptRosterInvitation(token) : await ensureRoster(auth.user)
-        const [loadedPlayers, loadedHistory, loadedOffsets] = await Promise.all([loadPlayers(id), loadHistory(id), loadLatestPlayerOffsets(id)])
+        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry] = await Promise.all([loadPlayers(id), loadHistory(id), loadLatestPlayerOffsets(id), loadChemistryHistory(id)])
         const owner = await isRosterOwner(id, auth.user.id)
         if (token) window.history.replaceState({}, '', window.location.pathname)
-        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setSelected(new Set()); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
+        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setSelected(new Set()); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
     }
@@ -296,7 +299,7 @@ export default function App() {
   const active = players.filter((player) => !player.archived)
   const selectedPlayers = players.filter((player) => selected.has(player.id) && !player.archived)
   const mean = (team: Team) => team.operationalRating / team.players.length
-  const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
+  const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers, chemistry); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
     if (!proposal) return
     const teamOnePlayers = proposal.teamOne.players.map((player) => player.id === oneId ? proposal.teamTwo.players.find((entry) => entry.id === twoId)! : player)
@@ -387,8 +390,8 @@ export default function App() {
       const updates = applyEloResult(proposal.teamOne.players, proposal.teamTwo.players, result, margin, performanceRatings)
       await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, updates, margin, performanceRatings)
       setPlayers((current) => current.map((player) => ({ ...player, learnedRating: updates.get(player.id) ?? player.learnedRating })))
-      const [updatedHistory, updatedOffsets] = await Promise.all([loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
-      setHistory(updatedHistory); setLatestOffsets(updatedOffsets); closeResultEditor(); setMessage('Resultado guardado y medias actualizadas.')
+      const [updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
+      setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); closeResultEditor(); setMessage('Resultado guardado y medias actualizadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
@@ -398,8 +401,8 @@ export default function App() {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
       await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin, performanceRatings)
-      const [updatedPlayers, updatedHistory, updatedOffsets] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
@@ -407,8 +410,8 @@ export default function App() {
     setSaving(true)
     try {
       await manageMatchHistory(entry.id, 'delete')
-      const [updatedPlayers, updatedHistory, updatedOffsets] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setMessage('Partido borrado y medias recalculadas.')
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setMessage('Partido borrado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo borrar el partido.') } finally { setSaving(false) }
   }
   const logout = async () => {

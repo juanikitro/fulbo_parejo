@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestPlayerOffsets, toHistoryEntries, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
+import { latestPlayerOffsets, toChemistryHistory, toHistoryEntries, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
 
 describe('toHistoryEntries', () => {
   it('keeps a completed match when Supabase embeds its one-to-one result as an object', () => {
@@ -39,6 +39,18 @@ describe('toHistoryEntries', () => {
     ]
 
     expect(latestPlayerOffsets(history)).toEqual(new Map([['nico', 0.18], ['juan', -0.12]]))
+  })
+})
+
+describe('toChemistryHistory', () => {
+  it('keeps the two sides of a completed match without relying on player names', () => {
+    expect(toChemistryHistory([{
+      match_results: { outcome: 'team_two' },
+      match_participants: [{ player_id: 'ana', team: 1 }, { player_id: 'bea', team: 1 }, { player_id: 'cami', team: 2 }],
+    }])).toEqual([{
+      outcome: 'team_two',
+      teams: [['ana', 'bea'], ['cami']],
+    }])
   })
 })
 
