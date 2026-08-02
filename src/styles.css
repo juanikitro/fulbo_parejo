@@ -113,5 +113,11 @@ html[data-theme='dark'] .team-card.orange > span { color: #f0c4a7; }
 html[data-theme='dark'] .team-card.blue > span { color: #bcd2f4; }
 html[data-theme='dark'] .vs { color: #d6e7d8; }
 html[data-theme='dark'] .vs small { color: #aabfac; }
+html[data-theme='dark'] .rating-info-modal p strong { color: #fff6d9; }
+html[data-theme='dark'] .performance-field legend { color: #edf4ed; }
+html[data-theme='dark'] .performance-field > p, html[data-theme='dark'] .performance-name small { color: #c5d6c7; }
+html[data-theme='dark'] .performance-option { color: #102216; }
+html[data-theme='dark'] .performance-option.selected { border-color: #fff6d9; box-shadow: 0 0 0 2px #0c1510, 0 3px 0 #020703; }
+html[data-theme='dark'] .performance-option:focus-visible { outline-color: #fff6d9; }
 html[data-theme='dark'] .rating-formula, html[data-theme='dark'] .result-choice { background: #2d4d31; color: #edf4ed !important; }
 html[data-theme='dark'] .modal-backdrop { background: #020703c9; }
