@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { applyEloResult, performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
-import { operationalRating, type MatchProposal, type Player, type Position, type Team } from './domain/types'
+import { isGoalkeeper, operationalRating, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
 import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry } from './lib/repository'
@@ -64,7 +64,7 @@ function PlayerEditor({
       <div className="form-heading"><div><p className="eyebrow">{editingPlayer ? 'EDITAR JUGADOR' : 'NUEVO JUGADOR'}</p><h2 id="player-editor-title">{editingPlayer ? editingPlayer.name : 'Sumá al plantel'}</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <label className="field-label">🧑 Nombre<input autoFocus placeholder="Ej. Juan" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></label>
       <label className="field-label">⭐ Media inicial<input type="number" min="1" max="10" step="0.1" value={draft.baseRating} onChange={(event) => onChange({ ...draft, baseRating: event.target.value })} /></label>
-      <label className="field-label">⚽ Posición preferida<select value={draft.preferredPosition} onChange={(event) => onChange({ ...draft, preferredPosition: event.target.value })}><option value="">Sin posición</option>{Object.entries(positionLabel).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+      <fieldset className="picker-field"><legend>⚽ Posición preferida</legend><div className="position-picker" role="group" aria-label="Posición preferida"><button type="button" className={!draft.preferredPosition ? 'selected' : ''} aria-pressed={!draft.preferredPosition} onClick={() => onChange({ ...draft, preferredPosition: '' })}>Sin posición</button>{positions.map((position) => <button type="button" className={draft.preferredPosition === position ? 'selected' : ''} aria-label={`Usar ${position}: ${positionLabel[position]}`} aria-pressed={draft.preferredPosition === position} key={position} onClick={() => onChange({ ...draft, preferredPosition: position })}><strong>{position}</strong><span>{positionLabel[position]}</span></button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🙂 Ícono</legend><div className="icon-picker">{playerIcons.map((icon) => <button type="button" className={draft.icon === icon ? 'selected' : ''} aria-label={`Usar ${icon}`} aria-pressed={draft.icon === icon} key={icon} onClick={() => onChange({ ...draft, icon })}>{icon}</button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🎨 Color <span className="color-value">{draft.color}</span></legend><div className="color-picker">{playerColors.map((color) => <button type="button" className={draft.color === color ? 'selected' : ''} aria-label={`Usar color ${color}`} aria-pressed={draft.color === color} key={color} onClick={() => onChange({ ...draft, color })}><i style={{ backgroundColor: color }} /></button>)}</div></fieldset>
       <div className="player-preview"><span style={{ backgroundColor: draft.color }}>{draft.icon}</span><strong>{draft.name || 'Tu jugador'}</strong><small>{draft.baseRating || '–'} de media</small></div>
@@ -121,13 +121,25 @@ function RatingInfo({ onClose }: { onClose: () => void }) {
   </div>
 }
 
+const pitchLayout: Record<Position, { left: number; top: number }> = {
+  PO: { left: 50, top: 90 },
+  DFI: { left: 18, top: 68 }, DFC: { left: 50, top: 68 }, DFD: { left: 82, top: 68 },
+  MI: { left: 18, top: 46 }, MC: { left: 50, top: 46 }, MD: { left: 82, top: 46 },
+  EI: { left: 18, top: 24 }, DC: { left: 50, top: 24 }, ED: { left: 82, top: 24 },
+}
+
+function pitchCoordinates(player: Player, players: Player[]) {
+  const layout = player.preferredPosition ? pitchLayout[player.preferredPosition] : { left: 50, top: 50 }
+  const matching = players.filter((entry) => entry.preferredPosition === player.preferredPosition)
+  const offset = (matching.findIndex((entry) => entry.id === player.id) - (matching.length - 1) / 2) * 14
+  return { left: Math.min(90, Math.max(10, layout.left + offset)), top: layout.top }
+}
+
 function Pitch({ team }: { team: Team }) {
-  const players = [...team.players].sort((a, b) => (a.preferredPosition === 'goalkeeper' ? -1 : 0) - (b.preferredPosition === 'goalkeeper' ? -1 : 0))
+  const players = [...team.players].sort((a, b) => Number(isGoalkeeper(b.preferredPosition)) - Number(isGoalkeeper(a.preferredPosition)))
   return <div className="pitch" aria-label={`Cancha ${team.name}`}><span className="centre-circle" />{players.map((player) => {
-    const row = player.preferredPosition === 'goalkeeper' ? 90 : player.preferredPosition === 'defender' ? 68 : player.preferredPosition === 'midfielder' ? 46 : 24
-    const sameRow = players.filter((entry) => (entry.preferredPosition ?? 'none') === (player.preferredPosition ?? 'none'))
-    const left = ((sameRow.findIndex((entry) => entry.id === player.id) + 1) / (sameRow.length + 1)) * 100
-    return <div className="pitch-player" key={player.id} style={{ left: `${left}%`, top: `${row}%` }} title={player.name}><span style={{ backgroundColor: player.color }}>{player.icon}</span><small>{player.name}</small></div>
+    const coordinate = pitchCoordinates(player, players)
+    return <div className="pitch-player" key={player.id} style={{ left: `${coordinate.left}%`, top: `${coordinate.top}%` }} title={player.name}><span style={{ backgroundColor: player.color }}>{player.icon}</span><small>{player.name}</small></div>
   })}</div>
 }
 
@@ -149,12 +161,10 @@ async function shareMatch(teamOne: Team, teamTwo: Team) {
     context.fillStyle = '#1a6741'; for (let stripe = 0; stripe < 8; stripe += 2) context.fillRect(left + stripe * 50, top, 50, 690)
     context.strokeStyle = '#d9f2c3'; context.lineWidth = 7; context.strokeRect(left + 8, top + 8, size - 16, 674); context.beginPath(); context.moveTo(left, top + 345); context.lineTo(left + size, top + 345); context.stroke(); context.beginPath(); context.arc(left + 200, top + 345, 60, 0, Math.PI * 2); context.stroke()
     context.fillStyle = accent; context.fillRect(left, pitchTop - 78, size, 54); context.fillStyle = '#172018'; context.font = '900 28px Manrope, system-ui'; context.fillText(`${team.name} · ${fmt(team.operationalRating / team.players.length)}`, left + 200, pitchTop - 41)
-    const players = [...team.players].sort((a, b) => (a.preferredPosition === 'goalkeeper' ? -1 : 0) - (b.preferredPosition === 'goalkeeper' ? -1 : 0))
+    const players = [...team.players].sort((a, b) => Number(isGoalkeeper(b.preferredPosition)) - Number(isGoalkeeper(a.preferredPosition)))
     players.forEach((player) => {
-      const row = player.preferredPosition === 'goalkeeper' ? 90 : player.preferredPosition === 'defender' ? 68 : player.preferredPosition === 'midfielder' ? 46 : 24
-      const sameRow = players.filter((entry) => (entry.preferredPosition ?? 'none') === (player.preferredPosition ?? 'none'))
-      const index = sameRow.findIndex((entry) => entry.id === player.id)
-      const x = left + ((index + 1) / (sameRow.length + 1)) * size; const y = top + (row / 100) * 690
+      const coordinate = pitchCoordinates(player, players)
+      const x = left + (coordinate.left / 100) * size; const y = top + (coordinate.top / 100) * 690
       context.fillStyle = player.color; context.beginPath(); context.arc(x, y, 27, 0, Math.PI * 2); context.fill(); context.strokeStyle = '#fffbed'; context.lineWidth = 4; context.stroke()
       context.fillStyle = '#172018'; context.font = '22px system-ui'; context.fillText(player.icon, x, y + 8)
       context.fillStyle = '#fffbed'; context.font = '800 16px Manrope, system-ui'; context.fillText(player.name, x, y - 39)

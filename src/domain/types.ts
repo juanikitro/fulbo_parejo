@@ -1,5 +1,21 @@
-export const positions = ['goalkeeper', 'defender', 'midfielder', 'forward'] as const
+export const positions = ['PO', 'DFI', 'DFC', 'DFD', 'MC', 'MD', 'MI', 'DC', 'EI', 'ED'] as const
 export type Position = (typeof positions)[number]
+export type PositionLine = 'goalkeeper' | 'defence' | 'midfield' | 'attack'
+
+export const positionLine: Record<Position, PositionLine> = {
+  PO: 'goalkeeper',
+  DFI: 'defence',
+  DFC: 'defence',
+  DFD: 'defence',
+  MC: 'midfield',
+  MD: 'midfield',
+  MI: 'midfield',
+  DC: 'attack',
+  EI: 'attack',
+  ED: 'attack',
+}
+
+export const isGoalkeeper = (position: Position | undefined) => position === 'PO'
 
 export type Player = {
   id: string
