@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js'
+import type { ChemistryMatch } from '../domain/chemistry'
 import type { Player, Position, Team } from '../domain/types'
 import type { PerformanceRating, RecordedResult } from '../domain/elo'
 import { supabase } from './supabase'
@@ -33,6 +34,7 @@ export type PlayerMatchHistoryEntry = {
 type HistoryResult = { outcome: HistoryEntry['outcome']; goal_difference: number | null }
 type HistoryParticipant = { rating_offset: number | string; performance_rating: PerformanceRating; players: { id: string; name: string } | { id: string; name: string }[] | null }
 type HistoryRow = { id: string; created_at: string; match_results: HistoryResult | HistoryResult[] | null; match_participants: HistoryParticipant[] | null }
+type ChemistryHistoryRow = { match_results: { outcome: ChemistryMatch['outcome'] } | { outcome: ChemistryMatch['outcome'] }[] | null; match_participants: { player_id: string; team: 1 | 2 }[] | null }
 type PlayerHistoryRow = { match_id: string; team: 1 | 2; rating_offset: number | string; performance_rating: PerformanceRating; matches: { created_at: string; match_results: HistoryResult | HistoryResult[] | null } | { created_at: string; match_results: HistoryResult | HistoryResult[] | null }[] | null }
 
 const client = () => {
@@ -143,6 +145,14 @@ export const latestPlayerOffsets = (history: HistoryEntry[]) => {
   return offsets
 }
 
+export const toChemistryHistory = (rows: ChemistryHistoryRow[]): ChemistryMatch[] => rows.flatMap((match) => {
+  const result = Array.isArray(match.match_results) ? match.match_results[0] : match.match_results
+  if (!result) return []
+  const teams: [string[], string[]] = [[], []]
+  for (const participant of match.match_participants ?? []) teams[participant.team - 1].push(participant.player_id)
+  return [{ outcome: result.outcome, teams }]
+})
+
 export const toPlayerMatchHistoryEntries = (rows: PlayerHistoryRow[]): PlayerMatchHistoryEntry[] => rows.flatMap((participant) => {
   const match = Array.isArray(participant.matches) ? participant.matches[0] : participant.matches
   const matchResult = match && (Array.isArray(match.match_results) ? match.match_results[0] : match.match_results)
@@ -161,6 +171,12 @@ export async function loadLatestPlayerOffsets(rosterId: string) {
   const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,performance_rating,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).order('id', { ascending: false })
   if (response.error) throw response.error
   return latestPlayerOffsets(toHistoryEntries(response.data as unknown as HistoryRow[]))
+}
+
+export async function loadChemistryHistory(rosterId: string) {
+  const response = await client().from('matches').select('match_results(outcome),match_participants(player_id,team)').eq('roster_id', rosterId).eq('status', 'completed')
+  if (response.error) throw response.error
+  return toChemistryHistory(response.data as ChemistryHistoryRow[])
 }
 
 export async function loadPlayerMatchHistory(rosterId: string, playerId: string) {
