@@ -112,10 +112,11 @@ function RatingInfo({ onClose }: { onClose: () => void }) {
   return <div className="modal-backdrop" onMouseDown={onClose}>
     <section className="result-modal rating-info-modal" role="dialog" aria-modal="true" aria-labelledby="rating-info-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="form-heading"><div><p className="eyebrow">CÓMO SE CALCULA</p><h2 id="rating-info-title">Las medias del plantel</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
-      <p><strong>Media base:</strong> la que cargás manualmente para cada jugador.</p>
-      <p><strong>Media aprendida:</strong> se ajusta con los resultados de los partidos.</p>
-      <p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p>
-      <p className="rating-formula">40% media base + 60% media aprendida</p>
+      <div className="rating-info-content">
+        <section><h3>La media que usa la app</h3><p><strong>Media base:</strong> la que cargás manualmente para cada jugador. <strong>Media aprendida:</strong> la que se actualiza después de cada partido.</p><p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p><p className="rating-formula">40% media base + 60% media aprendida</p></section>
+        <section><h3>Cómo funciona el Elo</h3><p>Antes del partido se comparan las medias operativas promedio de ambos equipos. Ganarle a un equipo que era favorito suma más; perder contra uno más fuerte resta menos.</p><p>El empate también modifica las medias: el equipo que llegaba como menos favorito puede subir y el favorito bajar.</p><p><strong>Diferencia de goles:</strong> una victoria más amplia aumenta el cambio de Elo de forma gradual, con un tope para que una goleada no descontrole las medias.</p></section>
+        <section><h3>Cómo jugó cada uno</h3><p>Al registrar el resultado, la valoración individual ajusta solamente el cambio de Elo de ese jugador en ese partido.</p><ul className="performance-explanation"><li><strong>Muy mal:</strong> 50% de lo que suma o 150% de lo que resta.</li><li><strong>Mal:</strong> 75% de lo que suma o 125% de lo que resta.</li><li><strong>Normal:</strong> 100% del cambio.</li><li><strong>Bien:</strong> 125% de lo que suma o 75% de lo que resta.</li><li><strong>Muy bien:</strong> 150% de lo que suma o 50% de lo que resta.</li></ul><p>Por eso, jugar <strong>muy bien</strong> potencia una victoria y amortigua una derrota; jugar <strong>muy mal</strong> hace lo contrario.</p></section>
+      </div>
       <button type="button" className="save-player" onClick={onClose}>Entendido</button>
     </section>
   </div>
