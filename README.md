@@ -19,3 +19,21 @@ npm run build
 ```
 
 Antes de desplegar, revisá las políticas RLS de la migración y verificá las cuotas actuales del proveedor.
+
+## Despliegue de producción
+
+Cada `push` a `main` (incluido un merge de PR) ejecuta `.github/workflows/deploy-production.yml` en serie:
+
+1. instala dependencias, ejecuta tests y genera el build;
+2. aplica únicamente las migraciones pendientes en Supabase;
+3. publica en Vercel el artefacto generado con las variables de producción.
+
+Configurá estos secretos de GitHub Actions antes del próximo merge:
+
+- `SUPABASE_ACCESS_TOKEN`: token personal de Supabase con acceso al proyecto;
+- `SUPABASE_PROJECT_REF`: referencia del proyecto de producción;
+- `SUPABASE_DB_PASSWORD`: contraseña de la base de datos de producción;
+- `VERCEL_TOKEN`: token de Vercel con acceso al proyecto;
+- `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID`: identificadores del equipo y proyecto de Vercel.
+
+El flujo no cancela ejecuciones ya iniciadas para no superponer migraciones. Las migraciones de producción deben ser retrocompatibles: primero expandir el esquema y sólo retirar campos o datos en una entrega posterior y revisada.
