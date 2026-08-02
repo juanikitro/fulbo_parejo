@@ -28,7 +28,6 @@ function ThemeSelector({ preference, onChange }: { preference: ThemePreference; 
     {([['system', '◐', 'Sistema'], ['light', '☀', 'Claro'], ['dark', '☾', 'Oscuro']] as const).map(([value, icon, label]) => <button type="button" className={preference === value ? 'active' : ''} aria-pressed={preference === value} aria-label={`Usar modo ${label.toLowerCase()}`} key={value} onClick={() => onChange(value)}><span aria-hidden="true">{icon}</span><span>{label}</span></button>)}
   </div>
 }
-const performanceSymbols: Record<PerformanceRating, string> = { '-2': '↓', '-1': '↘', 0: '−', 1: '↗', 2: '↑' }
 
 function OffsetIndicator({ offset }: { offset: number | undefined }) {
   if (!offset) return null
