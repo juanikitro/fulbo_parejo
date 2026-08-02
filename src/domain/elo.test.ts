@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { applyEloResult } from './elo'
+import { applyEloResult, inferRatingScale } from './elo'
 import type { Player } from './types'
 
 const player = (id: string, rating: number): Player => ({ id, name: id, baseRating: rating, learnedRating: rating, eloSeed: rating, icon: '⚽', color: '#000' })
 
 describe('applyEloResult', () => {
+  it('detects the 1–100 scale and keeps Elo adjustments proportional', () => {
+    const tenScale = applyEloResult([player('five', 5)], [player('four', 4)], 'teamOne').get('five')! - 5
+    const hundredScale = applyEloResult([player('fifty', 50)], [player('forty', 40)], 'teamOne').get('fifty')! - 50
+
+    expect(inferRatingScale([player('five', 5), player('four', 4)])).toBe(10)
+    expect(inferRatingScale([player('fifty', 50), player('forty', 40)])).toBe(100)
+    expect(hundredScale).toBeCloseTo(tenScale * 10)
+
+    const expectedLossAgainstFifty = applyEloResult([player('five', 5)], [player('fifty', 50)], 'teamTwo').get('five')! - 5
+    expect(expectedLossAgainstFifty).toBeLessThan(-0.01)
+  })
+
   it('rewards an upset more than an expected win', () => {
     const strong = [player('strong', 9)]
     const weak = [player('weak', 5)]
