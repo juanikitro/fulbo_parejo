@@ -93,7 +93,7 @@ Forma visible de mostrar la Valoración base y la aprendida con un decimal, aunq
 _Avoid_: Redondeo persistido
 
 **Valoración base**:
-Puntaje manual de 1 a 10 asignado por la persona organizadora, tomando 10 como referencia del mejor Jugador del grupo. Nunca se modifica por los resultados.
+Puntaje numérico libre asignado por la persona organizadora a cada Jugador. Nunca se modifica por los resultados.
 _Avoid_: Rating inicial, puntaje definitivo
 
 **Valoración aprendida**:

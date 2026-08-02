@@ -67,7 +67,7 @@ function PlayerEditor({
     <form className="player-form player-modal" role="dialog" aria-modal="true" aria-labelledby="player-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={onSubmit}>
       <div className="form-heading"><div><p className="eyebrow">{editingPlayer ? 'EDITAR JUGADOR' : 'NUEVO JUGADOR'}</p><h2 id="player-editor-title">{editingPlayer ? editingPlayer.name : 'Sumá al plantel'}</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <label className="field-label">🧑 Nombre<input autoFocus placeholder="Ej. Juan" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></label>
-      <label className="field-label">⭐ Media inicial<input type="number" min="1" max="10" step="0.1" value={draft.baseRating} onChange={(event) => onChange({ ...draft, baseRating: event.target.value })} /></label>
+      <label className="field-label">⭐ Media inicial<input type="number" step="any" value={draft.baseRating} onChange={(event) => onChange({ ...draft, baseRating: event.target.value })} /></label>
       <fieldset className="picker-field"><legend>⚽ Posición preferida</legend><div className="position-picker" role="group" aria-label="Posición preferida"><button type="button" className={!draft.preferredPosition ? 'selected' : ''} aria-pressed={!draft.preferredPosition} onClick={() => onChange({ ...draft, preferredPosition: '' })}>Sin posición</button>{positions.map((position) => <button type="button" className={draft.preferredPosition === position ? 'selected' : ''} aria-label={`Usar ${position}: ${positionLabel[position]}`} aria-pressed={draft.preferredPosition === position} key={position} onClick={() => onChange({ ...draft, preferredPosition: position })}><strong>{position}</strong><span>{positionLabel[position]}</span></button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🙂 Ícono</legend><div className="icon-picker">{playerIcons.map((icon) => <button type="button" className={draft.icon === icon ? 'selected' : ''} aria-label={`Usar ${icon}`} aria-pressed={draft.icon === icon} key={icon} onClick={() => onChange({ ...draft, icon })}>{icon}</button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🎨 Color <span className="color-value">{draft.color}</span></legend><div className="color-picker">{playerColors.map((color) => <button type="button" className={draft.color === color ? 'selected' : ''} aria-label={`Usar color ${color}`} aria-pressed={draft.color === color} key={color} onClick={() => onChange({ ...draft, color })}><i style={{ backgroundColor: color }} /></button>)}</div></fieldset>
@@ -365,7 +365,7 @@ export default function App() {
   const savePlayer = async (event: React.FormEvent) => {
     event.preventDefault(); if (!rosterId || !draft.name.trim()) return
     const rating = Number(draft.baseRating)
-    if (!Number.isFinite(rating) || rating < 1 || rating > 10) { setMessage('La media debe estar entre 1 y 10.'); return }
+    if (!draft.baseRating.trim() || !Number.isFinite(rating)) { setMessage('Ingresá una media numérica válida.'); return }
     setSaving(true)
     try {
       const attributes = { name: draft.name, baseRating: rating, learnedRating: editingPlayer?.learnedRating ?? rating, eloSeed: editingPlayer?.eloSeed ?? rating, preferredPosition: (draft.preferredPosition || undefined) as Position | undefined, icon: draft.icon, color: draft.color }
