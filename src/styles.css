@@ -103,5 +103,15 @@ html[data-theme='dark'] .player-preview, html[data-theme='dark'] .player-detail-
 html[data-theme='dark'] .player-card small, html[data-theme='dark'] .performance-name small, html[data-theme='dark'] .player-detail-summary small, html[data-theme='dark'] .player-detail-history li > div:first-child small, html[data-theme='dark'] .field-label small, html[data-theme='dark'] .performance-field > p, html[data-theme='dark'] .color-value { color: #aebdaf; }
 html[data-theme='dark'] .position-picker button span { color: #aebdaf; }
 html[data-theme='dark'] .team-card .team-player.manual-selected { outline-color: #d9eeb9; background: #ffffff12; }
+html[data-theme='dark'] .player-chip.selected { border-color: #9fd58d; background: #315a39; color: #f3fbe9; box-shadow: inset 0 0 0 1px #78b46e, 0 2px 0 #0b160d; }
+html[data-theme='dark'] .player-chip.selected span { box-shadow: 0 0 0 2px #d9eeb9; }
+html[data-theme='dark'] .team-card.orange { border: 1px solid #9d572c; background: linear-gradient(155deg, #542b1b, #2c1913); color: #fff1e5; }
+html[data-theme='dark'] .team-card.blue { border: 1px solid #406fbd; background: linear-gradient(155deg, #1b3a68, #12233e); color: #e8f1ff; }
+html[data-theme='dark'] .team-card.orange .eyebrow { color: #ffbf8c; }
+html[data-theme='dark'] .team-card.blue .eyebrow { color: #bcd6ff; }
+html[data-theme='dark'] .team-card.orange > span { color: #f0c4a7; }
+html[data-theme='dark'] .team-card.blue > span { color: #bcd2f4; }
+html[data-theme='dark'] .vs { color: #d6e7d8; }
+html[data-theme='dark'] .vs small { color: #aabfac; }
 html[data-theme='dark'] .rating-formula, html[data-theme='dark'] .result-choice { background: #2d4d31; color: #edf4ed !important; }
 html[data-theme='dark'] .modal-backdrop { background: #020703c9; }
