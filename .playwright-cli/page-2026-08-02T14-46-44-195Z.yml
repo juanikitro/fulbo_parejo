@@ -1,0 +1,50 @@
+- region "Registrar partido" [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e5]: 3 · RESULTADO
+      - heading "Registrar partido" [level=2] [ref=e6]
+    - button "Cerrar" [ref=e7] [cursor=pointer]: ×
+  - paragraph [ref=e8]: Ganó Claro
+  - generic [ref=e9]:
+    - text: 🥅 Diferencia de goles
+    - generic [ref=e10]: opcional
+    - spinbutton "🥅 Diferencia de goles opcional" [ref=e11]
+  - group "⭐ ¿Cómo jugó cada uno?" [ref=e12]:
+    - paragraph [ref=e14]: Normal está seleccionado por defecto.
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]: ⚽
+        - generic [ref=e18]:
+          - strong [ref=e19]: Juan
+          - generic [ref=e20]: Normal
+        - generic [ref=e21]:
+          - button "Muy mal" [ref=e22] [cursor=pointer]
+          - button "Mal" [ref=e23] [cursor=pointer]
+          - button "Normal" [ref=e24] [cursor=pointer]
+          - button "Bien" [ref=e25] [cursor=pointer]
+          - button "Muy bien" [ref=e26] [cursor=pointer]
+      - generic [ref=e27]:
+        - generic [ref=e28]: 🧤
+        - generic [ref=e29]:
+          - strong [ref=e30]: Mateo
+          - generic [ref=e31]: Normal
+        - generic [ref=e32]:
+          - button "Muy mal" [ref=e33] [cursor=pointer]
+          - button "Mal" [ref=e34] [cursor=pointer]
+          - button "Normal" [ref=e35] [cursor=pointer]
+          - button "Bien" [ref=e36] [cursor=pointer]
+          - button "Muy bien" [ref=e37] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]: 🦿
+        - generic [ref=e40]:
+          - strong [ref=e41]: Fede
+          - generic [ref=e42]: Normal
+        - generic [ref=e43]:
+          - button "Muy mal" [ref=e44] [cursor=pointer]
+          - button "Mal" [ref=e45] [cursor=pointer]
+          - button "Normal" [ref=e46] [cursor=pointer]
+          - button "Bien" [ref=e47] [cursor=pointer]
+          - button "Muy bien" [ref=e48] [cursor=pointer]
+  - generic [ref=e49]:
+    - button "Cancelar" [ref=e50] [cursor=pointer]
+    - button "Guardar resultado ✓" [ref=e51] [cursor=pointer]

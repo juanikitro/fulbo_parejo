@@ -9,9 +9,25 @@ import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
 type Tab = 'squad' | 'match' | 'history'
+type ThemePreference = 'system' | 'light' | 'dark'
+
+const themeStorageKey = 'fulbo-parejo-theme-preference'
 const fmt = (value: number) => value.toFixed(2)
 const blankDraft = { name: '', baseRating: '6', preferredPosition: '', icon: playerIcons[0], color: playerColors[0] }
 const performanceSymbols: Record<PerformanceRating, string> = { '-2': '↓', '-1': '↘', 0: '−', 1: '↗', 2: '↑' }
+
+function loadThemePreference(): ThemePreference {
+  try {
+    const value = window.localStorage.getItem(themeStorageKey)
+    return value === 'light' || value === 'dark' ? value : 'system'
+  } catch { return 'system' }
+}
+
+function ThemeSelector({ preference, onChange }: { preference: ThemePreference; onChange: (preference: ThemePreference) => void }) {
+  return <div className="theme-selector" role="group" aria-label="Apariencia">
+    {([['system', '◐', 'Sistema'], ['light', '☀', 'Claro'], ['dark', '☾', 'Oscuro']] as const).map(([value, icon, label]) => <button type="button" className={preference === value ? 'active' : ''} aria-pressed={preference === value} aria-label={`Usar modo ${label.toLowerCase()}`} key={value} onClick={() => onChange(value)}><span aria-hidden="true">{icon}</span><span>{label}</span></button>)}
+  </div>
+}
 
 function OffsetIndicator({ offset }: { offset: number | undefined }) {
   if (!offset) return null
@@ -152,6 +168,7 @@ async function shareMatch(teamOne: Team, teamTwo: Team) {
 export default function App() {
   const configured = Boolean(supabase)
   const [tab, setTab] = useState<Tab>('match')
+  const [themePreference, setThemePreference] = useState<ThemePreference>(loadThemePreference)
   const [sessionReady, setSessionReady] = useState(!configured)
   const [userId, setUserId] = useState<string | null>(null)
   const [rosterId, setRosterId] = useState<string | null>(null)
@@ -180,6 +197,26 @@ export default function App() {
   const [ratingInfoOpen, setRatingInfoOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      const theme = themePreference === 'system' ? (media.matches ? 'dark' : 'light') : themePreference
+      document.documentElement.dataset.theme = theme
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0c1510' : '#0d4c36')
+    }
+    applyTheme()
+    if (themePreference === 'system') media.addEventListener('change', applyTheme)
+    return () => media.removeEventListener('change', applyTheme)
+  }, [themePreference])
+
+  const changeThemePreference = (preference: ThemePreference) => {
+    try {
+      if (preference === 'system') window.localStorage.removeItem(themeStorageKey)
+      else window.localStorage.setItem(themeStorageKey, preference)
+    } catch { /* The selected theme still applies for this session. */ }
+    setThemePreference(preference)
+  }
 
   useEffect(() => {
     const db = supabase
@@ -353,12 +390,12 @@ export default function App() {
   }
   const historyParticipants = editingHistory?.playerOffsets.map((participant) => players.find((player) => player.id === participant.playerId) ?? { id: participant.playerId, name: participant.playerName, icon: '⚽', color: '#879381' }) ?? []
 
-  if (!configured) return <main className="app-shell"><header className="topbar"><h1>Fulbo Parejo</h1></header><section className="panel"><p className="eyebrow">CONFIGURACIÓN PENDIENTE</p><h2>Conectá Supabase para usar tu plantel privado.</h2><p className="muted">Faltan las variables públicas de Supabase en este entorno.</p></section></main>
-  if (!sessionReady) return <main className="app-shell"><section className="panel"><h2>Cargando tu vestuario…</h2></section></main>
-  if (!userId) return <main className="app-shell login-shell"><header className="topbar"><h1>Fulbo Parejo</h1></header><section className="panel login-panel"><p className="eyebrow">PLANTEL PRIVADO</p><h2>Tu convocatoria empieza acá.</h2><p className="muted">Entrá con tu cuenta para guardar medias, resultados y tu plantel.</p>{message && <p className="demo-banner">{message} <button onClick={() => setMessage(null)}>×</button></p>}<button className="google-login" onClick={() => void login()}><span>G</span>Continuar con Google <b>→</b></button></section></main>
+  if (!configured) return <main className="app-shell"><header className="topbar"><h1>Fulbo<em>Parejo</em></h1><ThemeSelector preference={themePreference} onChange={changeThemePreference} /></header><section className="panel"><p className="eyebrow">CONFIGURACIÓN PENDIENTE</p><h2>Conectá Supabase para usar tu plantel privado.</h2><p className="muted">Faltan las variables públicas de Supabase en este entorno.</p></section></main>
+  if (!sessionReady) return <main className="app-shell"><header className="topbar"><h1>Fulbo<em>Parejo</em></h1><ThemeSelector preference={themePreference} onChange={changeThemePreference} /></header><section className="panel"><h2>Cargando tu vestuario…</h2></section></main>
+  if (!userId) return <main className="app-shell login-shell"><header className="topbar"><h1>Fulbo<em>Parejo</em></h1><ThemeSelector preference={themePreference} onChange={changeThemePreference} /></header><section className="panel login-panel"><p className="eyebrow">PLANTEL PRIVADO</p><h2>Tu convocatoria empieza acá.</h2><p className="muted">Entrá con tu cuenta para guardar medias, resultados y tu plantel.</p>{message && <p className="demo-banner">{message} <button onClick={() => setMessage(null)}>×</button></p>}<button className="google-login" onClick={() => void login()}><span>G</span>Continuar con Google <b>→</b></button></section></main>
 
   return <main className="app-shell">
-    <header className="topbar"><h1>Fulbo Parejo</h1><div className="header-actions">{isOwner && <button className="invite-button" disabled={saving} onClick={() => void invite()}>Invitar 🔗</button>}<button className="logout-button" disabled={saving} onClick={() => void logout()}>Salir ↗</button></div></header>
+    <header className="topbar"><h1>Fulbo<em>Parejo</em></h1><div className="header-actions"><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{isOwner && <button className="invite-button" aria-label="Invitar al plantel" title="Invitar al plantel" disabled={saving} onClick={() => void invite()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving} onClick={() => void logout()}>⇥</button></div></header>
     {message && <p className="demo-banner">{message} <button onClick={() => setMessage(null)}>×</button></p>}
     {tab === 'squad' && <section className="panel"><div className="panel-heading"><div><p className="eyebrow">TU PLANTEL</p><div className="squad-title-row"><h2>{active.length} jugadores activos</h2><button type="button" className="rating-info-button" aria-label="Explicar las medias" aria-haspopup="dialog" onClick={() => setRatingInfoOpen(true)}>i</button></div></div><button onClick={() => openPlayerEditor()}>+ Crear jugador</button></div><div className="squad-grid">{active.map((player) => <article className="player-card" key={player.id}><button type="button" className="player-detail-trigger" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><span className="player-icon" style={{ backgroundColor: player.color }}>{player.icon}</span><span><strong>{player.name}</strong><small>{player.preferredPosition ? positionLabel[player.preferredPosition] : 'Sin posición'}</small></span></button><b>{player.baseRating} <small>({fmt(player.learnedRating)})</small></b><OffsetIndicator offset={latestOffsets.get(player.id)} /><div className="player-actions"><button aria-label={`Editar ${player.name}`} onClick={() => openPlayerEditor(player)}>✏️</button><button aria-label={`Archivar ${player.name}`} onClick={() => void archive(player)}>🗃️</button></div></article>)}</div><div className="roster-export"><p className="muted">Respaldo manual del plantel.</p><button className="export-button" onClick={() => downloadJson(players)}>↓ Exportar JSON</button></div></section>}
     {tab === 'match' && <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="chip-list">{active.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>

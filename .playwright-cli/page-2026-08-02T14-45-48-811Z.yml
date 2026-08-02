@@ -1,0 +1,6 @@
+- main [ref=e3]:
+  - heading "Fulbo Parejo" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - paragraph [ref=e7]: CONFIGURACIÓN PENDIENTE
+    - heading "Conectá Supabase para usar tu plantel privado." [level=2] [ref=e8]
+    - paragraph [ref=e9]: Faltan las variables públicas de Supabase en este entorno.
