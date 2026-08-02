@@ -20,4 +20,14 @@ describe('applyEloResult', () => {
     expect(updates.get('one')).toBe(7)
     expect(updates.get('two')).toBe(7)
   })
+
+  it('makes a very good loss and a very bad win count half as much', () => {
+    const one = player('one', 7)
+    const two = player('two', 7)
+    const normal = applyEloResult([one], [two], 'teamOne')
+    const adjusted = applyEloResult([one], [two], 'teamOne', undefined, new Map([['one', -2], ['two', 2]]))
+
+    expect(adjusted.get('one')! - 7).toBeCloseTo((normal.get('one')! - 7) / 2)
+    expect(7 - adjusted.get('two')!).toBeCloseTo((7 - normal.get('two')!) / 2)
+  })
 })

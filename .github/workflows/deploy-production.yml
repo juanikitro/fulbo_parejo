@@ -1,0 +1,74 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Database migrations must never run concurrently. Each main commit waits its turn
+# so Vercel is deployed only after its corresponding schema is up to date.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate application
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  migrate-supabase:
+    name: Apply Supabase migrations
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+
+      - name: Link the production project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Apply pending migrations
+        run: supabase db push --linked
+
+  deploy-vercel:
+    name: Deploy Vercel production
+    needs: migrate-supabase
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull Vercel production settings
+        run: npx --yes vercel@58.4.4 pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build the production artifact
+        run: npx --yes vercel@58.4.4 build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy the prebuilt artifact
+        run: npx --yes vercel@58.4.4 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
