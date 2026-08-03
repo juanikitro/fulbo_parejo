@@ -14,6 +14,7 @@ import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 import { isAdmin } from './admin/api'
 import { adminHash } from './admin/metrics'
 import RosterAccessDialog from './views/RosterAccessDialog'
+import InstallPrompt from './views/InstallPrompt'
 import RosterSwitcher, { RosterNameDialog } from './views/RosterSwitcher'
 
 const SquadTab = lazy(() => import('./views/SquadTab'))
@@ -652,9 +653,10 @@ export default function App() {
 
   if (!sessionReady) return <main className="app-shell"><header className="topbar"><h1>Fulbo<em>Parejo</em></h1><ThemeSelector preference={themePreference} onChange={changeThemePreference} /></header><section className="panel"><h2>Cargando tu vestuario…</h2></section></main>
   if (!userId) return <main className="landing-shell">{message && <NoticeToast message={message} onClose={() => setMessage(null)} />}<Suspense fallback={<TabLoader label="Armando la portada…" />}><LandingPage onLogin={() => void login()} themeControl={<ThemeSelector preference={themePreference} onChange={changeThemePreference} />} /></Suspense></main>
-  if (adminRoute) return <Suspense fallback={<main className="app-shell"><TabLoader label="Abriendo administración…" /></main>}><AdminPage onExit={() => { window.location.hash = '' }} /></Suspense>
+  if (adminRoute) return <><InstallPrompt authenticated={Boolean(userId)} /><Suspense fallback={<main className="app-shell"><TabLoader label="Abriendo administración…" /></main>}><AdminPage onExit={() => { window.location.hash = '' }} /></Suspense></>
 
   return <main className="app-shell">
+    <InstallPrompt authenticated={Boolean(userId)} />
     {archiveNotice ? <NoticeToast message={`${archiveNotice.name} fue enviado a la papelera`} actionLabel={archivingPlayerId === archiveNotice.id ? 'Restaurando…' : 'Deshacer'} actionDisabled={archivingPlayerId === archiveNotice.id} onAction={() => void restore(archiveNotice)} onClose={() => setArchiveNotice(null)} /> : message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
     <header className="topbar"><div><h1>Fulbo<em>Parejo</em></h1>{rosterId && <RosterSwitcher currentId={rosterId} rosters={rosters} userId={userId} saving={saving || rosterSaving} onSelect={requestRosterSelect} onCreate={saveRoster} onRename={saveRosterName} />}</div><div className="header-actions">{adminAvailable && <AdminDashboardButton onOpen={() => { window.location.hash = '#/admin' }} />}<SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(isOwner) && <button ref={inviteButtonRef} className="invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving || rosterSaving} onClick={() => void openRosterAccess()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving || rosterSaving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
     {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
