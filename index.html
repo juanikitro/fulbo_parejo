@@ -4,16 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0d4c36" />
-    <script>
-      (() => {
-        try {
-          const preference = localStorage.getItem('fulbo-parejo-theme-preference')
-          const theme = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
-          document.documentElement.dataset.theme = theme
-          document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0c1510' : '#0d4c36')
-        } catch { /* Use the light default when browser storage is unavailable. */ }
-      })()
-    </script>
+    <script src="/theme-bootstrap.js"></script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⚽%3C/text%3E%3C/svg%3E" />
     <title>Fulbo Matchmaking</title>
   </head>
