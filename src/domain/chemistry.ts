@@ -7,6 +7,12 @@ export type ChemistryMatch = {
 
 export type PairChemistry = ReadonlyMap<string, number>
 
+export type ChemistryPair = {
+  playerIds: readonly [string, string]
+  score: number
+  matches: number
+}
+
 const CONFIDENCE_MATCHES = 4
 
 const keyForPair = (first: string, second: string) => first < second ? `${first}\u0000${second}` : `${second}\u0000${first}`
@@ -15,7 +21,7 @@ const outcomeValue = (outcome: ChemistryOutcome, team: 1 | 2) => outcome === 'dr
 
 export const pairChemistry = (chemistry: PairChemistry, first: string, second: string) => chemistry.get(keyForPair(first, second)) ?? 0
 
-export function chemistryFromHistory(matches: readonly ChemistryMatch[]): PairChemistry {
+export function chemistryPairsFromHistory(matches: readonly ChemistryMatch[]): ChemistryPair[] {
   const totals = new Map<string, { points: number; matches: number }>()
 
   for (const match of matches) {
@@ -31,7 +37,15 @@ export function chemistryFromHistory(matches: readonly ChemistryMatch[]): PairCh
     })
   }
 
-  return new Map([...totals].map(([key, total]) => [key, total.points / total.matches * Math.min(1, total.matches / CONFIDENCE_MATCHES)]))
+  return [...totals].map(([key, total]) => ({
+    playerIds: key.split('\u0000') as [string, string],
+    score: total.points / total.matches * Math.min(1, total.matches / CONFIDENCE_MATCHES),
+    matches: total.matches,
+  }))
+}
+
+export function chemistryFromHistory(matches: readonly ChemistryMatch[]): PairChemistry {
+  return new Map(chemistryPairsFromHistory(matches).map((pair) => [keyForPair(...pair.playerIds), pair.score]))
 }
 
 export function chemistryWithSufficientEvidence(matches: readonly ChemistryMatch[]): PairChemistry {

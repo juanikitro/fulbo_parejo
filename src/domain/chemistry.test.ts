@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chemistryFromHistory, pairChemistry } from './chemistry'
+import { chemistryFromHistory, chemistryPairsFromHistory, pairChemistry } from './chemistry'
 
 describe('chemistryFromHistory', () => {
   it('rewards wins, gives draws a smaller reward, and penalizes losses for pairs on the same team', () => {
@@ -28,5 +28,15 @@ describe('chemistryFromHistory', () => {
     ])
 
     expect(pairChemistry(chemistry, 'ana', 'bea')).toBe(0)
+  })
+
+  it('keeps the shared match count alongside each pair score for player details', () => {
+    const pairs = chemistryPairsFromHistory([
+      { outcome: 'team_one', teams: [['ana', 'bea'], ['cami', 'dani']] },
+      { outcome: 'draw', teams: [['ana', 'bea'], ['cami', 'dani']] },
+    ])
+
+    expect(pairs).toContainEqual({ playerIds: ['ana', 'bea'], score: 0.3125, matches: 2 })
+    expect(pairs).toContainEqual({ playerIds: ['cami', 'dani'], score: -0.1875, matches: 2 })
   })
 })
