@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { chemistryFromHistory, type PairChemistry } from './domain/chemistry'
-import { applyEloResult, inferRatingScale, performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
+import { performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { isGoalkeeper, operationalRating, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
-import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry } from './lib/repository'
+import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadAccessibleRosters, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 
@@ -34,6 +34,10 @@ function ThemeSelector({ preference, onChange }: { preference: ThemePreference; 
   const labels = { system: 'Sistema', light: 'Claro', dark: 'Oscuro' }
   const next = modes[(modes.indexOf(preference) + 1) % modes.length]
   return <button type="button" className="theme-toggle" aria-label={`Cambiar apariencia. Modo actual: ${labels[preference]}. Siguiente: ${labels[next]}.`} title={`Modo ${labels[preference]}`} onClick={() => onChange(next)}>{icons[preference]}</button>
+}
+
+function SystemHelpButton({ onOpen }: { onOpen: () => void }) {
+  return <button type="button" className="system-help-button" aria-label="Abrir ayuda: cómo funciona Fulbo Parejo" aria-haspopup="dialog" title="Cómo funciona Fulbo Parejo" onClick={onOpen}>i</button>
 }
 
 function OffsetIndicator({ offset }: { offset: number | undefined }) {
@@ -117,12 +121,15 @@ function PlayerDetail({ player, history, loading, error, onClose }: { player: Pl
 function RatingInfo({ onClose }: { onClose: () => void }) {
   return <div className="modal-backdrop" onMouseDown={onClose}>
     <section className="result-modal rating-info-modal" role="dialog" aria-modal="true" aria-labelledby="rating-info-title" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="form-heading"><div><p className="eyebrow">CÓMO SE CALCULA</p><h2 id="rating-info-title">Las medias del plantel</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
+      <div className="form-heading"><div><p className="eyebrow">GUÍA DEL SISTEMA</p><h2 id="rating-info-title">Cómo funciona Fulbo Parejo</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <div className="rating-info-content">
         <section><h3>La media que usa la app</h3><p><strong>Media base:</strong> la que cargás manualmente para cada jugador. <strong>Media aprendida:</strong> la que se actualiza después de cada partido.</p><p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p><p className="rating-formula">40% media base + 60% media aprendida</p></section>
+        <section><h3>Cómo se arman los equipos</h3><p>La app divide a los convocados en dos equipos de la misma cantidad y busca reducir al mínimo la diferencia entre sus medias operativas.</p><p><strong>Posiciones y arqueros:</strong> se tienen en cuenta como un ajuste suave. Si hay dos o más PO, intenta dejar uno por equipo; si hay uno solo, compensa al equipo que queda sin arquero. Las demás posiciones ayudan a repartir líneas y puestos, pero no son una formación obligatoria.</p><p><strong>Cantidad impar:</strong> prueba dejar fuera a cada convocado y elige al no asignado que permite el armado más equilibrado. No aplica rotación automática.</p></section>
         <section><h3>Cómo funciona el Elo</h3><p>Antes del partido se comparan las medias operativas promedio de ambos equipos. Ganarle a un equipo que era favorito suma más; perder contra uno más fuerte resta menos.</p><p>El empate también modifica las medias: el equipo que llegaba como menos favorito puede subir y el favorito bajar.</p><p><strong>Diferencia de goles:</strong> una victoria más amplia aumenta el cambio de Elo de forma gradual, con un tope para que una goleada no descontrole las medias.</p></section>
         <section><h3>Cómo jugó cada uno</h3><p>Al registrar el resultado, la valoración individual ajusta solamente el cambio de Elo de ese jugador en ese partido.</p><ul className="performance-explanation"><li><strong>Muy mal:</strong> 50% de lo que suma o 150% de lo que resta.</li><li><strong>Mal:</strong> 75% de lo que suma o 125% de lo que resta.</li><li><strong>Normal:</strong> 100% del cambio.</li><li><strong>Bien:</strong> 125% de lo que suma o 75% de lo que resta.</li><li><strong>Muy bien:</strong> 150% de lo que suma o 50% de lo que resta.</li></ul><p>Por eso, jugar <strong>muy bien</strong> potencia una victoria y amortigua una derrota; jugar <strong>muy mal</strong> hace lo contrario.</p></section>
         <section><h3>Química de los equipos</h3><p>La app aprende qué jugadores rinden mejor juntos según los partidos que compartieron en el mismo equipo.</p><p>Una victoria suma química, un empate suma menos y una derrota resta. Cuantos más partidos compartan, más confiable será esa señal.</p><p>Al armar equipos, la química sólo ajusta de forma gradual el equilibrio de medias y posiciones: busca juntar duplas que funcionan y separar las que vienen rindiendo peor.</p></section>
+        <section><h3>Pizarra e intercambios</h3><p>La pizarra muestra a cada equipo sobre la cancha según la posición preferida de sus jugadores. Es sólo una representación visual: no cambia el armado, las medias ni el resultado.</p><p>El botón ↔ propone un cambio con un rival de posición o línea comparable y de media cercana. En modo custom, podés elegir libremente un jugador de cada equipo para intercambiarlos; después el cambio de medias se muestra, pero no se rebalancea de forma automática.</p></section>
+        <section><h3>Historial y correcciones</h3><p>Podés editar o borrar un resultado desde Historial. La app recalcula las medias aprendidas recorriendo los partidos guardados, para que el plantel refleje la corrección sin perder el resto del historial.</p></section>
       </div>
       <button type="button" className="save-player" onClick={onClose}>Entendido</button>
     </section>
@@ -200,6 +207,7 @@ export default function App() {
   const [userId, setUserId] = useState<string | null>(null)
   const [rosterLoading, setRosterLoading] = useState(configured)
   const [rosterId, setRosterId] = useState<string | null>(null)
+  const [rosters, setRosters] = useState<RosterSummary[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [players, setPlayers] = useState<Player[]>([])
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
@@ -210,6 +218,8 @@ export default function App() {
   const [customMode, setCustomMode] = useState(false)
   const [manualSelection, setManualSelection] = useState<{ playerId: string; team: 'teamOne' | 'teamTwo' } | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [draft, setDraft] = useState(blankDraft)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
@@ -279,27 +289,49 @@ export default function App() {
     const db = supabase
     if (!db || !userId) return
     let live = true
-    const load = async () => {
+    const initializeRoster = async () => {
       setRosterLoading(true)
       try {
         const { data: auth } = await db.auth.getUser()
         if (!auth.user) return
         const token = new URLSearchParams(window.location.search).get('invite')
         const id = token ? await acceptRosterInvitation(token) : await ensureRoster(auth.user)
-        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry] = await Promise.all([loadPlayers(id), loadHistory(id), loadLatestPlayerOffsets(id), loadChemistryHistory(id)])
-        const owner = await isRosterOwner(id, auth.user.id)
+        const accessibleRosters = await loadAccessibleRosters()
         if (token) window.history.replaceState({}, '', window.location.pathname)
-        if (live) { setRosterId(id); setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setSelected(new Set()); setHistory(loadedHistory); if (token) setMessage('Te sumaste al plantel compartido.') }
+        if (live) { setRosters(accessibleRosters); setRosterId(id); if (token) setMessage('Te sumaste al plantel compartido.') }
+      } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
+      finally { if (live) setRosterLoading(false) }
+    }
+    void initializeRoster()
+    return () => { live = false }
+  }, [userId])
+
+  useEffect(() => {
+    const db = supabase
+    if (!db || !userId || !rosterId) return
+    let live = true
+    const load = async () => {
+      setRosterLoading(true)
+      try {
+        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, owner] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), isRosterOwner(rosterId, userId)])
+        if (live) {
+          setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
+        }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
     }
     void load()
     return () => { live = false }
-  }, [userId])
+  }, [rosterId, userId])
 
   const active = players.filter((player) => !player.archived)
   const selectedPlayers = players.filter((player) => selected.has(player.id) && !player.archived)
   const mean = (team: Team) => team.operationalRating / team.players.length
+  const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
+  const selectRoster = (nextRosterId: string) => {
+    if (nextRosterId === rosterId) return
+    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setRosterId(nextRosterId)
+  }
   const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers, chemistry); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
     if (!proposal) return
@@ -352,6 +384,16 @@ export default function App() {
   }
   const closeHistoryEditor = () => { setEditingHistory(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
   const setPlayerPerformance = (playerId: string, rating: PerformanceRating) => setPerformanceRatings((current) => new Map(current).set(playerId, rating))
+  const loadMoreHistory = async () => {
+    if (!rosterId || historyLoadingMore || !historyHasMore) return
+    setHistoryLoadingMore(true)
+    try {
+      const page = await loadHistory(rosterId, history.length)
+      setHistory((current) => [...current, ...page.entries.filter((entry) => !current.some((currentEntry) => currentEntry.id === entry.id))])
+      setHistoryHasMore(page.hasMore)
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar los partidos anteriores.') }
+    finally { setHistoryLoadingMore(false) }
+  }
   const openPlayerDetail = async (player: Player) => {
     if (!rosterId) return
     const request = ++detailRequest.current
@@ -372,15 +414,16 @@ export default function App() {
     if (!draft.baseRating.trim() || !Number.isFinite(rating)) { setMessage('Ingresá una media numérica válida.'); return }
     setSaving(true)
     try {
-      const attributes = { name: draft.name, baseRating: rating, learnedRating: editingPlayer?.learnedRating ?? rating, eloSeed: editingPlayer?.eloSeed ?? rating, preferredPosition: (draft.preferredPosition || undefined) as Position | undefined, icon: draft.icon, color: draft.color }
+      const resetLearning = Boolean(editingPlayer && editingPlayer.baseRating !== rating)
+      const attributes = { name: draft.name, baseRating: rating, learnedRating: resetLearning ? rating : editingPlayer?.learnedRating ?? rating, eloSeed: resetLearning ? rating : editingPlayer?.eloSeed ?? rating, preferredPosition: (draft.preferredPosition || undefined) as Position | undefined, icon: draft.icon, color: draft.color }
       const player = editingPlayer ? await updatePlayer(editingPlayer.id, attributes) : await createPlayer(rosterId, attributes)
       setPlayers((current) => editingPlayer ? current.map((entry) => entry.id === player.id ? player : entry) : [...current, player])
-      setEditorOpen(false); setEditingPlayer(null); setDraft(blankDraft)
+      discardProposal(); setEditorOpen(false); setEditingPlayer(null); setDraft(blankDraft); if (resetLearning) setMessage('Media base actualizada: se reinició el aprendizaje para mantener el historial consistente.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar el jugador.') } finally { setSaving(false) }
   }
   const archive = async (player: Player) => {
     if (!window.confirm(`¿Archivar a ${player.name}? Podés recuperarlo luego desde la base de datos.`)) return
-    try { await setArchived(player.id, true); setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: true } : entry)); setSelected((current) => { const next = new Set(current); next.delete(player.id); return next }) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo archivar el jugador.') }
+    try { await setArchived(player.id, true); setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: true } : entry)); setSelected((current) => { const next = new Set(current); next.delete(player.id); return next }); discardProposal() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo archivar el jugador.') }
   }
   const record = async (result: RecordedResult) => {
     if (!proposal || !rosterId) return
@@ -388,12 +431,9 @@ export default function App() {
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
-      const ratingScale = inferRatingScale(active)
-      const updates = applyEloResult(proposal.teamOne.players, proposal.teamTwo.players, result, margin, performanceRatings, ratingScale)
-      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, updates, ratingScale, margin, performanceRatings)
-      setPlayers((current) => current.map((player) => ({ ...player, learnedRating: updates.get(player.id) ?? player.learnedRating })))
-      const [updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); closeResultEditor(); setMessage('Resultado guardado y medias actualizadas.')
+      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, margin, performanceRatings)
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); discardProposal(); setMessage('Resultado guardado y medias actualizadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
@@ -404,7 +444,7 @@ export default function App() {
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
       await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin, performanceRatings)
       const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); discardProposal(); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
@@ -413,7 +453,7 @@ export default function App() {
     try {
       await manageMatchHistory(entry.id, 'delete')
       const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setMessage('Partido borrado y medias recalculadas.')
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); discardProposal(); setMessage('Partido borrado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo borrar el partido.') } finally { setSaving(false) }
   }
   const logout = async () => {
@@ -421,7 +461,6 @@ export default function App() {
     try { await signOut() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo cerrar sesión.') } finally { setSaving(false) }
   }
   const login = async () => {
-    // La landing se muestra siempre; la falta de configuración recién se avisa al intentar entrar.
     if (!configured) { setMessage('Conectá Supabase para usar tu plantel privado: faltan sus variables públicas en este entorno.'); return }
     try { await signInWithGoogle() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo iniciar sesión.') }
   }
@@ -438,25 +477,21 @@ export default function App() {
   const historyParticipants = editingHistory?.playerOffsets.map((participant) => players.find((player) => player.id === participant.playerId) ?? { id: participant.playerId, name: participant.playerName, icon: '⚽', color: '#879381' }) ?? []
 
   if (!sessionReady) return <main className="app-shell"><header className="topbar"><h1>Fulbo<em>Parejo</em></h1><ThemeSelector preference={themePreference} onChange={changeThemePreference} /></header><section className="panel"><h2>Cargando tu vestuario…</h2></section></main>
-  if (!userId) return <main className="landing-shell">
-    {message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
-    <Suspense fallback={<TabLoader label="Armando la portada…" />}>
-      <LandingPage onLogin={() => void login()} themeControl={<ThemeSelector preference={themePreference} onChange={changeThemePreference} />} />
-    </Suspense>
-  </main>
+  if (!userId) return <main className="landing-shell">{message && <NoticeToast message={message} onClose={() => setMessage(null)} />}<Suspense fallback={<TabLoader label="Armando la portada…" />}><LandingPage onLogin={() => void login()} themeControl={<ThemeSelector preference={themePreference} onChange={changeThemePreference} />} /></Suspense></main>
 
   return <main className="app-shell">
     {message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
-    <header className="topbar"><h1>Fulbo<em>Parejo</em></h1><div className="header-actions"><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{isOwner && <button className="invite-button" aria-label="Invitar al plantel" title="Invitar al plantel" disabled={saving} onClick={() => void invite()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
-    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} players={players} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={archive} onOpenRatingInfo={() => setRatingInfoOpen(true)} onExport={() => downloadJson(players)} /></Suspense>}
-    {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes juegan?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="chip-list">{active.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
+    <header className="topbar"><h1>Fulbo<em>Parejo</em></h1><div className="header-actions"><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{isOwner && <button className="invite-button" aria-label="Invitar al plantel" title="Invitar al plantel" disabled={saving} onClick={() => void invite()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
+    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} players={players} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={archive} onExport={() => downloadJson(players)} /></Suspense>}
+    {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="chip-list">{active.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
       {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <small>Δ {fmt(proposal.balanceGap)}</small></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section>{proposal.unassigned && <p className="unassigned">No asignado para maximizar equilibrio: <strong>{proposal.unassigned.name}</strong></p>}<section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>)}
-    {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab history={history} saving={saving} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} /></Suspense>}
+    {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab history={history} saving={saving} hasMore={historyHasMore} loadingMore={historyLoadingMore} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} onLoadMore={loadMoreHistory} /></Suspense>}
     {editorOpen && <PlayerEditor draft={draft} editingPlayer={editingPlayer} saving={saving} onClose={() => setEditorOpen(false)} onSubmit={(event) => void savePlayer(event)} onChange={setDraft} />}
     {pendingResult && proposal && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} participants={[...proposal.teamOne.players, ...proposal.teamTwo.players]} performanceRatings={performanceRatings} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onSave={() => void record(pendingResult)} />}
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} history={playerMatchHistory} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
+    <footer className="cafecito-support"><a href="https://cafecito.app/juanikitro" rel="noopener" target="_blank"><img srcSet="https://cdn.cafecito.app/imgs/buttons/button_1.png 1x, https://cdn.cafecito.app/imgs/buttons/button_1_2x.png 2x, https://cdn.cafecito.app/imgs/buttons/button_1_3.75x.png 3.75x" src="https://cdn.cafecito.app/imgs/buttons/button_1.png" alt="Invitame un café en cafecito.app" /></a></footer>
     <nav className="bottom-nav">{([['squad', '👥', 'Plantel'], ['match', '⚽', 'Nuevo partido'], ['history', '📋', 'Historial']] as const).map(([key, icon, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}><span>{icon}</span>{label}</button>)}</nav>
   </main>
 }
