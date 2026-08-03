@@ -1,5 +1,5 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { createSupabaseContext } from "@supabase/server";
+import { createClient } from "@supabase/supabase-js";
 
 type Action = "access" | "summary" | "users" | "user-detail" | "rosters" | "roster-detail" | "matches" | "match-detail" | "invitations";
 type Row = Record<string, unknown>;
@@ -148,17 +148,31 @@ function matchRows(data: Awaited<ReturnType<typeof loadDataset>>) {
 export default {
   fetch: async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-    const { data: ctx, error } = await createSupabaseContext(req, { auth: "user" });
-    if (error || !ctx?.userClaims?.id) return json({ message: "Iniciá sesión para acceder a esta sección." }, 401);
+    const authorization = req.headers.get("Authorization");
+    if (!authorization) return json({ message: "Iniciá sesión para acceder a esta sección." }, 401);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      console.error("admin-metrics is missing required Supabase environment variables");
+      return json({ message: "No se pudo verificar el permiso." }, 500);
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) return json({ message: "Iniciá sesión para acceder a esta sección." }, 401);
+
+    const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = (await req.json().catch(() => ({}))) as Row;
     const action = string(body.action) as Action | null;
     if (!action) return json({ message: "Solicitud administrativa inválida." }, 400);
-    const { data: adminRole, error: roleError } = await ctx.supabaseAdmin.from("admin_users").select("role").eq("user_id", ctx.userClaims.id).eq("role", "superadmin").maybeSingle();
+    const { data: adminRole, error: roleError } = await admin.from("admin_users").select("role").eq("user_id", user.id).eq("role", "superadmin").maybeSingle();
     if (roleError) return json({ message: "No se pudo verificar el permiso." }, 500);
     if (!adminRole) return json({ message: "No tenés permiso para acceder a esta sección." }, 403);
     if (action === "access") return json({ isAdmin: true, role: "superadmin" });
     try {
-      const data = await loadDataset(ctx.supabaseAdmin);
+      const data = await loadDataset(admin);
       if (action === "summary") return json(makeSummary(data, body));
       const page = Math.max(1, Math.floor(number(body.page) || 1)), pageSize = Math.min(50, Math.max(10, Math.floor(number(body.pageSize) || 20))), query = (string(body.query) ?? "").trim().toLowerCase();
       if (action === "users") {
