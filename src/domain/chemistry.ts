@@ -33,3 +33,24 @@ export function chemistryFromHistory(matches: readonly ChemistryMatch[]): PairCh
 
   return new Map([...totals].map(([key, total]) => [key, total.points / total.matches * Math.min(1, total.matches / CONFIDENCE_MATCHES)]))
 }
+
+export function chemistryWithSufficientEvidence(matches: readonly ChemistryMatch[]): PairChemistry {
+  const totals = new Map<string, { points: number; matches: number }>()
+
+  for (const match of matches) {
+    match.teams.forEach((team, index) => {
+      const value = outcomeValue(match.outcome, index === 0 ? 1 : 2)
+      for (let first = 0; first < team.length; first += 1) {
+        for (let second = first + 1; second < team.length; second += 1) {
+          const key = keyForPair(team[first], team[second])
+          const current = totals.get(key) ?? { points: 0, matches: 0 }
+          totals.set(key, { points: current.points + value, matches: current.matches + 1 })
+        }
+      }
+    })
+  }
+
+  return new Map([...totals]
+    .filter(([, total]) => total.matches >= CONFIDENCE_MATCHES)
+    .map(([key, total]) => [key, total.points / total.matches]))
+}

@@ -216,3 +216,13 @@ html[data-theme='dark'] .squad-control input, html[data-theme='dark'] .squad-con
 .trash { margin-top: 22px; border-top: 1px dashed #c9c2a5; padding-top: 14px; }.trash summary { cursor: pointer; color: #526857; font: 800 12px 'DM Mono', monospace; }.trash summary:focus-visible { outline: 3px solid #f2b13f; outline-offset: 3px; border-radius: 4px; }.trash-list { display: grid; gap: 8px; margin-top: 12px; }.trash-player { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #e0dccb; border-radius: 10px; background: #f5f1e2; }.trash-player > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }.trash-player strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.trash-player small { color: #737b73; font-size: 11px; }.restore-player-button { margin-left: auto; border: 1px solid #9abf8f; border-radius: 8px; padding: 7px 9px; background: #ddf4ce; color: #28623a; font-size: 12px; font-weight: 800; }.restore-player-button:focus-visible { outline: 3px solid #f2b13f; outline-offset: 2px; }.restore-player-button:disabled { cursor: wait; opacity: .72; }.trash-empty { margin-top: 10px; }
 html[data-theme='dark'] .notice-toast .notice-toast-action, html[data-theme='dark'] .restore-player-button { border-color: #5f9660; background: #315a39; color: #effae8; }
 html[data-theme='dark'] .trash { border-color: #3c5142; }.trash summary { color: #b8c8ba; }.trash-player { border-color: #3c5142; background: #213426; }.trash-player small, html[data-theme='dark'] .archive-dialog > p:not(.eyebrow) { color: #aebdaf; }
+
+.matchmaking-explanation { margin: 12px 4px 0; padding: 14px; border: 1px solid #d9d4bf; border-radius: 14px; background: #f5f1e2; color: #526857; }
+.matchmaking-explanation h2 { margin-top: 4px; color: #354238; font-size: 15px; }
+.matchmaking-explanation > p:not(.eyebrow) { margin-top: 7px; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.matchmaking-explanation details { margin-top: 9px; font-size: 12px; }
+.matchmaking-explanation summary { width: max-content; color: #354238; cursor: pointer; font-weight: 800; }
+.matchmaking-explanation summary:focus-visible { outline: 3px solid #f2b13f; outline-offset: 3px; border-radius: 3px; }
+.matchmaking-explanation ul { display: grid; gap: 5px; margin: 9px 0 0; padding-left: 17px; line-height: 1.4; }
+html[data-theme='dark'] .matchmaking-explanation { border-color: #3c5142; background: #1b2a20; color: #b8c8ba; }
+html[data-theme='dark'] .matchmaking-explanation h2, html[data-theme='dark'] .matchmaking-explanation summary { color: #edf4ed; }
