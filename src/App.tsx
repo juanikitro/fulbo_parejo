@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { chemistryFromHistory, chemistryWithSufficientEvidence, type PairChemistry } from './domain/chemistry'
+import { chemistryFromHistory, chemistryPairsFromHistory, chemistryWithSufficientEvidence, type ChemistryPair, type PairChemistry } from './domain/chemistry'
 import { groupCallupPlayers } from './domain/callup'
 import { performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
@@ -132,13 +132,24 @@ function ResultEditor({ result, goalDifference, saving, participants, performanc
   </div>
 }
 
-function PlayerDetail({ player, history, loading, error, onClose }: { player: Player; history: PlayerMatchHistoryEntry[]; loading: boolean; error: string | null; onClose: () => void }) {
+function PlayerDetail({ player, players, history, chemistryPairs, loading, error, onClose }: { player: Player; players: Player[]; history: PlayerMatchHistoryEntry[]; chemistryPairs: ChemistryPair[]; loading: boolean; error: string | null; onClose: () => void }) {
   const performanceLabel = (rating: PerformanceRating) => performanceLevels.find((level) => level.value === rating)!.label
+  const [detailTab, setDetailTab] = useState<'history' | 'chemistry'>('history')
+  useEffect(() => setDetailTab('history'), [player.id])
+  const chemistry = chemistryPairs.flatMap((pair) => {
+    const teammateId = pair.playerIds[0] === player.id ? pair.playerIds[1] : pair.playerIds[1] === player.id ? pair.playerIds[0] : null
+    const teammate = teammateId ? players.find((entry) => entry.id === teammateId) : undefined
+    return teammate ? [{ ...pair, teammate }] : []
+  })
+  const strongestChemistry = [...chemistry].sort((first, second) => second.score - first.score).slice(0, 3)
+  const weakestChemistry = [...chemistry].sort((first, second) => first.score - second.score).slice(0, 3)
+  const chemistryList = (entries: typeof chemistry) => entries.length ? <ol>{entries.map(({ teammate, score, matches }) => <li key={teammate.id}><div className="chemistry-player"><span style={{ backgroundColor: teammate.color }}>{teammate.icon}</span><div><strong>{teammate.name}</strong><small>{matches} {matches === 1 ? 'partido' : 'partidos'} juntos{matches < 4 ? ' · Poca evidencia' : ''}</small></div></div><strong className={`chemistry-score ${score > 0 ? 'positive-offset' : score < 0 ? 'negative-offset' : ''}`}>{score > 0 ? '+' : ''}{fmt(score)}</strong></li>)}</ol> : <p className="muted">Todavía no compartió equipo con otro jugador.</p>
   return <div className="modal-backdrop" onMouseDown={onClose}>
     <section className="result-modal player-detail-modal" role="dialog" aria-modal="true" aria-labelledby="player-detail-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="form-heading"><div><p className="eyebrow">FICHA DEL JUGADOR</p><h2 id="player-detail-title">{player.name}</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <div className="player-detail-summary"><span style={{ backgroundColor: player.color }}>{player.icon}</span><div><strong>{fmt(operationalRating(player))}</strong><small>media operativa</small></div><div><strong>{history.length}</strong><small>partidos</small></div></div>
-      <div className="player-detail-history"><h3>Partidos jugados</h3>{loading ? <p className="muted">Cargando partidos…</p> : error ? <p className="detail-error">{error}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><div><strong>{new Date(entry.createdAt).toLocaleDateString('es-AR')} · {entry.result === 'win' ? 'Ganó' : entry.result === 'loss' ? 'Perdió' : 'Empató'}</strong><small>{entry.goalDifference === null ? 'Sin diferencia de goles' : `Diferencia de goles: ${entry.goalDifference}`}</small></div><div className="player-match-metrics"><small className={`performance-badge performance-${entry.performanceRating + 2}`}>{performanceLabel(entry.performanceRating)}</small><small className={`rating-offset ${entry.offset > 0 ? 'positive-offset' : entry.offset < 0 ? 'negative-offset' : ''}`}>{entry.offset > 0 ? '+' : ''}{fmt(entry.offset)}</small></div></li>)}</ol> : <p className="muted">Todavía no jugó partidos registrados.</p>}</div>
+      <div className="player-detail-tabs" role="tablist" aria-label="Datos del jugador"><button type="button" role="tab" aria-selected={detailTab === 'history'} aria-controls="player-detail-history" className={detailTab === 'history' ? 'selected' : ''} onClick={() => setDetailTab('history')}>Historial</button><button type="button" role="tab" aria-selected={detailTab === 'chemistry'} aria-controls="player-detail-chemistry" className={detailTab === 'chemistry' ? 'selected' : ''} onClick={() => setDetailTab('chemistry')}>Química</button></div>
+      {detailTab === 'history' ? <div id="player-detail-history" className="player-detail-history" role="tabpanel"><h3>Partidos jugados</h3>{loading ? <p className="muted">Cargando partidos…</p> : error ? <p className="detail-error">{error}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><div><strong>{new Date(entry.createdAt).toLocaleDateString('es-AR')} · {entry.result === 'win' ? 'Ganó' : entry.result === 'loss' ? 'Perdió' : 'Empató'}</strong><small>{entry.goalDifference === null ? 'Sin diferencia de goles' : `Diferencia de goles: ${entry.goalDifference}`}</small></div><div className="player-match-metrics"><small className={`performance-badge performance-${entry.performanceRating + 2}`}>{performanceLabel(entry.performanceRating)}</small><small className={`rating-offset ${entry.offset > 0 ? 'positive-offset' : entry.offset < 0 ? 'negative-offset' : ''}`}>{entry.offset > 0 ? '+' : ''}{fmt(entry.offset)}</small></div></li>)}</ol> : <p className="muted">Todavía no jugó partidos registrados.</p>}</div> : <div id="player-detail-chemistry" className="player-detail-chemistry" role="tabpanel"><p className="muted">Se calcula según los partidos compartidos en el mismo equipo.</p><section><h3>Más química</h3>{chemistryList(strongestChemistry)}</section><section><h3>Menos química</h3>{chemistryList(weakestChemistry)}</section></div>}
     </section>
   </div>
 }
@@ -239,6 +250,7 @@ export default function App() {
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
   const [chemistry, setChemistry] = useState<PairChemistry>(new Map())
   const [chemistryWithEvidence, setChemistryWithEvidence] = useState<PairChemistry>(new Map())
+  const [chemistryPairs, setChemistryPairs] = useState<ChemistryPair[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [proposal, setProposal] = useState<MatchProposal | null>(null)
   const [balancedProposal, setBalancedProposal] = useState<MatchProposal | null>(null)
@@ -361,7 +373,7 @@ export default function App() {
       try {
         const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, owner] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), isRosterOwner(rosterId, userId)])
         if (live) {
-          setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
+          setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
         }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
@@ -376,7 +388,7 @@ export default function App() {
   const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setMatchmakingExplanationOpen(false) }
   const selectRoster = (nextRosterId: string) => {
     if (nextRosterId === rosterId) return
-    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setRosterId(nextRosterId)
+    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setRosterId(nextRosterId)
   }
   const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
@@ -505,7 +517,7 @@ export default function App() {
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
       await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, margin, performanceRatings)
       const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); discardProposal(); setMessage('Resultado guardado y medias actualizadas.')
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Resultado guardado y medias actualizadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
@@ -516,7 +528,7 @@ export default function App() {
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
       await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin, performanceRatings)
       const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); discardProposal(); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
@@ -525,7 +537,7 @@ export default function App() {
     try {
       await manageMatchHistory(entry.id, 'delete')
       const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); discardProposal(); setMessage('Partido borrado y medias recalculadas.')
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Partido borrado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo borrar el partido.') } finally { setSaving(false) }
   }
   const logout = async () => {
@@ -581,7 +593,7 @@ export default function App() {
     {editorOpen && <PlayerEditor draft={draft} editingPlayer={editingPlayer} saving={saving} onClose={() => setEditorOpen(false)} onSubmit={(event) => void savePlayer(event)} onChange={setDraft} />}
     {pendingResult && proposal && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} participants={[...proposal.teamOne.players, ...proposal.teamTwo.players]} performanceRatings={performanceRatings} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onSave={() => void record(pendingResult)} />}
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
-    {detailPlayer && <PlayerDetail player={detailPlayer} history={playerMatchHistory} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
+    {detailPlayer && <PlayerDetail player={detailPlayer} players={players} history={playerMatchHistory} chemistryPairs={chemistryPairs} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {rosterAccessOpen && canManageRosterAccess(isOwner) && <RosterAccessDialog entries={rosterAccessEntries} loading={rosterAccessLoading} loadError={rosterAccessLoadError} inviteError={invitationError} inviting={invitationLoading} onClose={closeRosterAccess} onInvite={() => void invite()} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
     {matchmakingExplanationOpen && proposal && <MatchmakingExplanationDialog proposal={proposal} onClose={() => setMatchmakingExplanationOpen(false)} />}
