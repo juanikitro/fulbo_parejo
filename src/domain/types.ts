@@ -49,6 +49,9 @@ export type MatchProposal = {
   balanceGap: number
   goalkeeperCompensation: number
   positionPenalty: number
+  positionAdjustmentChangedResult: boolean
+  chemistryChangedResult: boolean
+  unassignedPreservesBalance?: boolean
 }
 
 export const operationalRating = (player: Player) =>
