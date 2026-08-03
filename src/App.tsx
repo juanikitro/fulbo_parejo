@@ -130,6 +130,7 @@ function RatingInfo({ onClose }: { onClose: () => void }) {
         <section><h3>Química de los equipos</h3><p>La app aprende qué jugadores rinden mejor juntos según los partidos que compartieron en el mismo equipo.</p><p>Una victoria suma química, un empate suma menos y una derrota resta. Cuantos más partidos compartan, más confiable será esa señal.</p><p>Al armar equipos, la química sólo ajusta de forma gradual el equilibrio de medias y posiciones: busca juntar duplas que funcionan y separar las que vienen rindiendo peor.</p></section>
         <section><h3>Pizarra e intercambios</h3><p>La pizarra muestra a cada equipo sobre la cancha según la posición preferida de sus jugadores. Es sólo una representación visual: no cambia el armado, las medias ni el resultado.</p><p>El botón ↔ propone un cambio con un rival de posición o línea comparable y de media cercana. En modo custom, podés elegir libremente un jugador de cada equipo para intercambiarlos; después el cambio de medias se muestra, pero no se rebalancea de forma automática.</p></section>
         <section><h3>Historial y correcciones</h3><p>Podés editar o borrar un resultado desde Historial. La app recalcula las medias aprendidas recorriendo los partidos guardados, para que el plantel refleje la corrección sin perder el resto del historial.</p></section>
+        <a className="mayofy-credit" href="https://mayofy.vercel.app" target="_blank" rel="noopener noreferrer"><span>Fulbo Parejo está desarrollado por</span><img src="https://mayofy.vercel.app/_next/image?url=%2Fimages%2Fmayofy-wordmark.png&w=3840&q=70" alt="Mayofy" /></a>
       </div>
       <button type="button" className="save-player" onClick={onClose}>Entendido</button>
     </section>
@@ -491,7 +492,7 @@ export default function App() {
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} history={playerMatchHistory} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
-    <footer className="cafecito-support"><a href="https://cafecito.app/juanikitro" rel="noopener" target="_blank"><img srcSet="https://cdn.cafecito.app/imgs/buttons/button_1.png 1x, https://cdn.cafecito.app/imgs/buttons/button_1_2x.png 2x, https://cdn.cafecito.app/imgs/buttons/button_1_3.75x.png 3.75x" src="https://cdn.cafecito.app/imgs/buttons/button_1.png" alt="Invitame un café en cafecito.app" /></a></footer>
+    <footer className="cafecito-support"><a href="https://cafecito.app/juanikitro" rel="noopener noreferrer" target="_blank">☕ <span>Doname un cafecito</span><span aria-hidden="true">↗</span></a></footer>
     <nav className="bottom-nav">{([['squad', '👥', 'Plantel'], ['match', '⚽', 'Nuevo partido'], ['history', '📋', 'Historial']] as const).map(([key, icon, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}><span>{icon}</span>{label}</button>)}</nav>
   </main>
 }
