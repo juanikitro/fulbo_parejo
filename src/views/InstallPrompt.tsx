@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { deferInstallPrompt, installInstructions, isInstallPromptDeferred, isInstalledApp, promptForInstall, subscribeToInstallAvailability } from '../lib/pwaInstall'
+import { canShowInstallPrompt, deferInstallPrompt, installInstructions, isInstallPromptDeferred, isInstalledApp, promptForInstall, subscribeToInstallAvailability } from '../lib/pwaInstall'
 
 function storage() {
   try { return window.localStorage } catch { return null }
@@ -11,7 +11,7 @@ export default function InstallPrompt({ authenticated }: { authenticated: boolea
   useEffect(() => subscribeToInstallAvailability(setNativePromptAvailable), [])
 
   useEffect(() => {
-    if (!authenticated || isInstalledApp() || isInstallPromptDeferred(storage())) {
+    if (!canShowInstallPrompt({ authenticated, installed: isInstalledApp(), deferred: isInstallPromptDeferred(storage()) })) {
       setVisible(false)
       return
     }

@@ -30,9 +30,71 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  configure-supabase-auth:
+    name: Configure Supabase Auth URLs
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+    steps:
+      - name: Keep Auth redirects on the canonical domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical_url='https://fulboparejo.vercel.app'
+          legacy_url='https://fulbo-matchmaking-lyart.vercel.app'
+          auth_config="$(mktemp)"
+          auth_payload="$(mktemp)"
+          google_config="$(mktemp)"
+          updated_config="$(mktemp)"
+          trap 'rm -f "$auth_config" "$auth_payload" "$google_config" "$updated_config"' EXIT
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth" > "$auth_config"
+
+          jq '{ external_google_enabled, external_google_client_id, external_google_redirect_uri }' "$auth_config" > "$google_config"
+          jq --arg canonical "$canonical_url" --arg legacy "$legacy_url" '
+            def urls:
+              if . == null then []
+              elif type == "array" then .
+              else split(",")
+              end;
+            (.uri_allow_list | urls
+              | map(gsub("^\\s+|\\s+$"; ""))
+              | map(select(. != "" and . != $legacy))
+              | . + [$canonical]
+              | unique) as $redirects
+            | { site_url: $canonical, uri_allow_list: ($redirects | join(",")) }
+          ' "$auth_config" > "$auth_payload"
+
+          curl --fail --silent --show-error \
+            -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data @"$auth_payload" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth" > "$updated_config"
+          jq -e --arg canonical "$canonical_url" --arg legacy "$legacy_url" --slurpfile google "$google_config" '
+            def urls:
+              if . == null then []
+              elif type == "array" then .
+              else split(",")
+              end;
+            .site_url == $canonical
+            and ((.uri_allow_list | urls) | index($canonical) != null)
+            and ((.uri_allow_list | urls) | all(. != $legacy))
+            and { external_google_enabled, external_google_client_id, external_google_redirect_uri } == $google[0]
+          ' "$updated_config" > /dev/null
+
   migrate-supabase:
     name: Apply Supabase migrations
-    needs: validate
+    needs: configure-supabase-auth
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -58,17 +120,23 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_PROJECT_ID: prj_eegHtsSTXVrbUMJrvb81CtLvAjvX
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Pull Vercel production settings
-        run: npx --yes vercel@58.4.4 pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: npx --yes vercel@58.4.4 pull --yes --environment=production --scope=juanikitros-projects --token="$VERCEL_TOKEN"
 
       - name: Build the production artifact
-        run: npx --yes vercel@58.4.4 build --prod --token="$VERCEL_TOKEN"
+        run: npx --yes vercel@58.4.4 build --prod --scope=juanikitros-projects --token="$VERCEL_TOKEN"
 
       - name: Deploy the prebuilt artifact
-        run: npx --yes vercel@58.4.4 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        id: deploy
+        run: |
+          url="$(npx --yes vercel@58.4.4 deploy --prebuilt --prod --scope=juanikitros-projects --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Assign the canonical production alias
+        run: npx --yes vercel@58.4.4 alias set "${{ steps.deploy.outputs.url }}" fulboparejo.vercel.app --scope=juanikitros-projects --token="$VERCEL_TOKEN"

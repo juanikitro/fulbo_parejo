@@ -6,7 +6,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 type InstallAvailabilityListener = (available: boolean) => void
 
-export const installPromptStorageKey = 'fulbo-parejo-install-prompt-deferred-until-v1'
+export const installPromptStorageKey = 'fulbo-parejo-install-prompt-deferred-until-v2'
 export const installPromptDeferralMs = 30 * 24 * 60 * 60 * 1000
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null
@@ -54,6 +54,10 @@ export function isInstallPromptDeferred(storage: Storage | null, now = Date.now(
   } catch {
     return false
   }
+}
+
+export function canShowInstallPrompt({ authenticated, installed, deferred }: { authenticated: boolean; installed: boolean; deferred: boolean }) {
+  return authenticated && !installed && !deferred
 }
 
 export function deferInstallPrompt(storage: Storage | null, now = Date.now()) {
