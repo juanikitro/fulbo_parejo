@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestPlayerOffsets, toChemistryHistory, toHistoryEntries, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
+import { latestPlayerOffsets, toChemistryHistory, toHistoryEntries, toHistoryPage, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
 
 describe('toHistoryEntries', () => {
   it('keeps a completed match when Supabase embeds its one-to-one result as an object', () => {
@@ -39,6 +39,20 @@ describe('toHistoryEntries', () => {
     ]
 
     expect(latestPlayerOffsets(history)).toEqual(new Map([['nico', 0.18], ['juan', -0.12]]))
+  })
+})
+
+describe('toHistoryPage', () => {
+  it('keeps one extra row only as a pagination signal', () => {
+    const rows: Parameters<typeof toHistoryPage>[0] = [
+      { id: 'new', created_at: '2026-08-03T12:00:00.000Z', match_results: { outcome: 'team_one', goal_difference: null }, match_participants: [] },
+      { id: 'old', created_at: '2026-08-02T12:00:00.000Z', match_results: { outcome: 'draw', goal_difference: null }, match_participants: [] },
+    ]
+
+    expect(toHistoryPage(rows, 1)).toEqual({
+      entries: [{ id: 'new', createdAt: '2026-08-03T12:00:00.000Z', outcome: 'team_one', goalDifference: null, playerOffsets: [] }],
+      hasMore: true,
+    })
   })
 })
 
