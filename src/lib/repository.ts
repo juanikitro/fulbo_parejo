@@ -1,4 +1,3 @@
-import type { User } from '@supabase/supabase-js'
 import type { ChemistryMatch } from '../domain/chemistry'
 import type { Player, Position, Team } from '../domain/types'
 import type { PerformanceRating, RecordedResult } from '../domain/elo'
@@ -57,23 +56,42 @@ const fromRow = (row: PlayerRow): Player => ({
   archived: Boolean(row.archived_at),
 })
 
-export async function ensureRoster(user: User) {
-  const db = client()
-  const existing = await db.from('rosters').select('id').eq('owner_id', user.id).maybeSingle()
-  if (existing.error) throw existing.error
-  if (existing.data) return existing.data.id as string
-  const membership = await db.from('roster_members').select('roster_id').eq('user_id', user.id).order('created_at').limit(1).maybeSingle()
-  if (membership.error) throw membership.error
-  if (membership.data) return membership.data.roster_id as string
-  const created = await db.from('rosters').insert({ owner_id: user.id, name: 'Mi plantel' }).select('id').single()
-  if (created.error) throw created.error
-  return created.data.id as string
+export function rosterNameError(value: string) {
+  const name = value.trim()
+  if (name.length < 2) return 'Usá al menos 2 caracteres.'
+  if (name.length > 40) return 'Usá como máximo 40 caracteres.'
+  return null
 }
 
 export async function loadAccessibleRosters(): Promise<RosterSummary[]> {
   const response = await client().from('rosters').select('id,name,owner_id').order('created_at')
   if (response.error) throw response.error
   return (response.data as { id: string; name: string; owner_id: string }[]).map((roster) => ({ id: roster.id, name: roster.name, ownerId: roster.owner_id }))
+}
+
+export async function createRoster(ownerId: string, name: string) {
+  const response = await client().from('rosters').insert({ owner_id: ownerId, name: name.trim() }).select('id,name,owner_id').single()
+  if (response.error) throw response.error
+  const roster = response.data as { id: string; name: string; owner_id: string }
+  return { id: roster.id, name: roster.name, ownerId: roster.owner_id } satisfies RosterSummary
+}
+
+export async function renameRoster(rosterId: string, name: string) {
+  const response = await client().from('rosters').update({ name: name.trim() }).eq('id', rosterId).select('id,name,owner_id').single()
+  if (response.error) throw response.error
+  const roster = response.data as { id: string; name: string; owner_id: string }
+  return { id: roster.id, name: roster.name, ownerId: roster.owner_id } satisfies RosterSummary
+}
+
+export async function loadActiveRosterId(userId: string) {
+  const response = await client().from('roster_preferences').select('active_roster_id').eq('user_id', userId).maybeSingle()
+  if (response.error) throw response.error
+  return response.data?.active_roster_id as string | null | undefined
+}
+
+export async function saveActiveRosterId(userId: string, rosterId: string) {
+  const response = await client().from('roster_preferences').upsert({ user_id: userId, active_roster_id: rosterId }, { onConflict: 'user_id' })
+  if (response.error) throw response.error
 }
 
 export async function isRosterOwner(rosterId: string, userId: string) {

@@ -8,10 +8,11 @@ import { isGoalkeeper, operationalRating, partitionPlayers, positions, type Matc
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
 import { canManageRosterAccess, generateWhatsAppInvitation, runOnce, type RosterAccessEntry } from './lib/rosterAccess'
-import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadAccessibleRosters, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
+import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, isRosterOwner, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, manageMatchHistory, recordMatch, renameRoster, saveActiveRosterId, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 import RosterAccessDialog from './views/RosterAccessDialog'
+import RosterSwitcher, { RosterNameDialog } from './views/RosterSwitcher'
 
 const SquadTab = lazy(() => import('./views/SquadTab'))
 const HistoryTab = lazy(() => import('./views/HistoryTab'))
@@ -48,6 +49,10 @@ function OffsetIndicator({ offset }: { offset: number | undefined }) {
   if (!offset) return null
   const positive = offset > 0
   return <small className={`rating-offset ${positive ? 'positive-offset' : 'negative-offset'}`} aria-label={`${positive ? 'Subió' : 'Bajó'} ${Math.abs(offset).toFixed(2)} puntos`}>{positive ? '↑' : '↓'} {positive ? '+' : ''}{fmt(offset)}</small>
+}
+
+function RosterSwitchConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return <div className="modal-backdrop"><section className="result-modal roster-switch-confirm" role="alertdialog" aria-modal="true" aria-labelledby="roster-switch-confirm-title"><p className="eyebrow">CAMBIAR PLANTEL</p><h2 id="roster-switch-confirm-title">¿Descartar lo que estás preparando?</h2><p>La convocatoria, los equipos y los cambios sin guardar no se conservarán.</p><div className="modal-actions"><button type="button" className="cancel-button" onClick={onCancel}>Seguir editando</button><button type="button" className="save-player" onClick={onConfirm}>Cambiar plantel</button></div></section></div>
 }
 
 function TabLoader({ label = 'Cargando…', panel = false }: { label?: string; panel?: boolean }) {
@@ -244,6 +249,9 @@ export default function App() {
   const [rosterLoading, setRosterLoading] = useState(configured)
   const [rosterId, setRosterId] = useState<string | null>(null)
   const [rosters, setRosters] = useState<RosterSummary[]>([])
+  const [rosterSetupOpen, setRosterSetupOpen] = useState(false)
+  const [rosterSwitchTarget, setRosterSwitchTarget] = useState<string | null>(null)
+  const [rosterSaving, setRosterSaving] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [players, setPlayers] = useState<Player[]>([])
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
@@ -349,13 +357,17 @@ export default function App() {
     const initializeRoster = async () => {
       setRosterLoading(true)
       try {
-        const { data: auth } = await db.auth.getUser()
-        if (!auth.user) return
         const token = new URLSearchParams(window.location.search).get('invite')
-        const id = token ? await acceptRosterInvitation(token) : await ensureRoster(auth.user)
-        const accessibleRosters = await loadAccessibleRosters()
+        const id = token ? await acceptRosterInvitation(token) : null
+        const [accessibleRosters, preferredId] = await Promise.all([loadAccessibleRosters(), id ? Promise.resolve(id) : loadActiveRosterId(userId)])
         if (token) window.history.replaceState({}, '', window.location.pathname)
-        if (live) { setRosters(accessibleRosters); setRosterId(id); if (token) setMessage('Te sumaste al plantel compartido.') }
+        const activeId = accessibleRosters.some((roster) => roster.id === preferredId) ? preferredId! : accessibleRosters[0]?.id ?? null
+        if (live) {
+          setRosters(accessibleRosters)
+          setRosterId(activeId)
+          setRosterSetupOpen(!activeId)
+          if (id) { setMessage('Te sumaste al plantel compartido.'); void saveActiveRosterId(userId, id) }
+        }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
     }
@@ -387,7 +399,44 @@ export default function App() {
   const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setMatchmakingExplanationOpen(false) }
   const selectRoster = (nextRosterId: string) => {
     if (nextRosterId === rosterId) return
-    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setRosterId(nextRosterId)
+    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); closePlayerDetail(); setRosterId(nextRosterId)
+    if (userId) void saveActiveRosterId(userId, nextRosterId).catch(() => setMessage('No pudimos recordar este plantel para tu próximo ingreso.'))
+  }
+  const hasUnsavedRosterWork = selected.size > 0 || Boolean(proposal || editorOpen || pendingResult || editingHistory)
+  const requestRosterSelect = (nextRosterId: string) => {
+    if (nextRosterId === rosterId) return
+    if (hasUnsavedRosterWork) { setRosterSwitchTarget(nextRosterId); return }
+    selectRoster(nextRosterId)
+  }
+  const saveRoster = async (name: string) => {
+    if (!userId) return
+    setRosterSaving(true)
+    try {
+      const roster = await createRoster(userId, name)
+      setRosters((current) => [...current, roster])
+      setRosterSetupOpen(false)
+      requestRosterSelect(roster.id)
+      setMessage(`“${roster.name}” está listo para cargar jugadores.`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo crear el plantel.'
+      setMessage(message)
+      throw new Error(message)
+    }
+    finally { setRosterSaving(false) }
+  }
+  const saveRosterName = async (name: string) => {
+    if (!rosterId) return
+    setRosterSaving(true)
+    try {
+      const roster = await renameRoster(rosterId, name)
+      setRosters((current) => current.map((entry) => entry.id === roster.id ? roster : entry))
+      setMessage('Nombre del plantel actualizado.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo renombrar el plantel.'
+      setMessage(message)
+      throw new Error(message)
+    }
+    finally { setRosterSaving(false) }
   }
   const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
@@ -584,7 +633,7 @@ export default function App() {
 
   return <main className="app-shell">
     {archiveNotice ? <NoticeToast message={`${archiveNotice.name} fue enviado a la papelera`} actionLabel={archivingPlayerId === archiveNotice.id ? 'Restaurando…' : 'Deshacer'} actionDisabled={archivingPlayerId === archiveNotice.id} onAction={() => void restore(archiveNotice)} onClose={() => setArchiveNotice(null)} /> : message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
-    <header className="topbar"><h1>Fulbo<em>Parejo</em></h1><div className="header-actions"><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(isOwner) && <button ref={inviteButtonRef} className="invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving} onClick={() => void openRosterAccess()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
+    <header className="topbar"><div><h1>Fulbo<em>Parejo</em></h1>{rosterId && <RosterSwitcher currentId={rosterId} rosters={rosters} userId={userId} saving={saving || rosterSaving} onSelect={requestRosterSelect} onCreate={saveRoster} onRename={saveRosterName} />}</div><div className="header-actions"><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(isOwner) && <button ref={inviteButtonRef} className="invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving || rosterSaving} onClick={() => void openRosterAccess()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving || rosterSaving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
     {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
     {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
       {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <button type="button" className="balance-gap-trigger" aria-label={`Ver por qué quedaron parejos: diferencia de ${fmt(proposal.balanceGap)} de media`} aria-haspopup="dialog" onClick={() => setMatchmakingExplanationOpen(true)}>Δ {fmt(proposal.balanceGap)}</button></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section><section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>)}
@@ -594,6 +643,8 @@ export default function App() {
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} players={players} history={playerMatchHistory} chemistryPairs={chemistryPairs} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {rosterAccessOpen && canManageRosterAccess(isOwner) && <RosterAccessDialog entries={rosterAccessEntries} loading={rosterAccessLoading} loadError={rosterAccessLoadError} inviteError={invitationError} inviting={invitationLoading} onClose={closeRosterAccess} onInvite={() => void invite()} />}
+    {rosterSetupOpen && <RosterNameDialog title="Tu primer plantel" saving={rosterSaving} onSave={saveRoster} />}
+    {rosterSwitchTarget && <RosterSwitchConfirm onCancel={() => setRosterSwitchTarget(null)} onConfirm={() => { selectRoster(rosterSwitchTarget); setRosterSwitchTarget(null) }} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
     {matchmakingExplanationOpen && proposal && <MatchmakingExplanationDialog proposal={proposal} onClose={() => setMatchmakingExplanationOpen(false)} />}
     {archiveCandidate && <ArchivePlayerDialog player={archiveCandidate} saving={archivingPlayerId === archiveCandidate.id} onClose={() => setArchiveCandidate(null)} onConfirm={() => void archive()} />}

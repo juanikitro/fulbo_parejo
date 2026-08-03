@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { latestPlayerOffsets, toChemistryHistory, toHistoryEntries, toHistoryPage, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
+import { latestPlayerOffsets, rosterNameError, toChemistryHistory, toHistoryEntries, toHistoryPage, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
+
+describe('roster names', () => {
+  it('requires a concise non-empty name', () => {
+    expect(rosterNameError(' Fútbol de los lunes ')).toBeNull()
+    expect(rosterNameError(' ')).toContain('2')
+    expect(rosterNameError('x'.repeat(41))).toContain('40')
+  })
+})
 
 describe('toHistoryEntries', () => {
   it('keeps a completed match when Supabase embeds its one-to-one result as an object', () => {

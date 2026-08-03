@@ -9,16 +9,20 @@ Persona que participa de los partidos y tiene una valoración usada para formar 
 _Avoid_: Usuario, miembro
 
 **Cuenta**:
-Identidad autenticada de una persona que usa la aplicación y es propietaria de un único Plantel.
+Identidad autenticada de una persona que puede ser dueña de varios Planteles y colaborar en otros compartidos.
 _Avoid_: Usuario del plantel, perfil
 
 **Plantel**:
-Conjunto permanente de Jugadores perteneciente a una Cuenta, del que se seleccionan los Convocados para cada Partido.
+Espacio independiente de Jugadores, Partidos, Historial y valoraciones. Tiene una Cuenta dueña y puede tener Cuentas colaboradoras.
 _Avoid_: Lista de asistentes, equipo
 
 **Privacidad del Plantel**:
-Regla por la que sólo la Cuenta propietaria puede leer o modificar su Plantel, sus Partidos y su Historial.
-_Avoid_: Plantel compartido, acceso público
+Regla por la que sólo la Cuenta dueña y sus Cuentas colaboradoras pueden leer o modificar sus datos. Sólo la dueña cambia el nombre o administra invitaciones.
+_Avoid_: Acceso público
+
+**Colaborador**:
+Cuenta invitada a un Plantel. Puede gestionar Jugadores y Partidos, pero no renombrar ni administrar accesos.
+_Avoid_: Propietario secundario, lector
 
 **Autenticación Google**:
 Mecanismo por el que una Cuenta se identifica mediante su identidad de Google, sin credenciales locales propias de la aplicación.
