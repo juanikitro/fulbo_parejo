@@ -29,6 +29,13 @@ export type Player = {
   archived?: boolean
 }
 
+export function partitionPlayers(players: Player[]) {
+  return {
+    activePlayers: players.filter((player) => !player.archived),
+    archivedPlayers: players.filter((player) => player.archived),
+  }
+}
+
 export type Team = {
   name: string
   players: Player[]
