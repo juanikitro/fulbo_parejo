@@ -79,7 +79,7 @@ export default function LandingPage({ onLogin, themeControl }: { onLogin: () => 
     <section className="landing-wrap landing-section">
       <p className="landing-eyebrow">LA PREVIA</p>
       <h3 className="landing-title">Siempre termina igual</h3>
-      <p className="landing-body landing-dropcap">Los mismos dos de siempre eligen, el que llegó tarde cae en el equipo flaco y a la media hora va 6 a 1. El problema no es la gente: armar equipos a ojo depende de la memoria del que arma, y la memoria le miente a todo el mundo.</p>
+      <p className="landing-body landing-dropcap">Armar equipos no es fácil. No todos los días jugás igual. No todos juegan igual con todos. Armar equipos a ojo no escala. Algunos no se mueven si no les decís que ganan o pierden puntos. Algunos necesitan competir.</p>
       <blockquote className="landing-quote">Un partido parejo no se sortea. Se calcula.</blockquote>
     </section>
 
