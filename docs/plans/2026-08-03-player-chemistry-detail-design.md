@@ -15,6 +15,8 @@ The chemistry view presents two ranked lists:
 
 Each row contains the teammate identity, the chemistry value, and the number of matches played together. Pairs with fewer than four shared matches remain visible and are labeled **Poca evidencia**. If the player has no shared-team history, the view states that clearly.
 
+The two rankings are mutually exclusive: a teammate shown in **Mejor química** is excluded from **Menor química**, and vice versa.
+
 ## Data and behavior
 
 The feature derives its information from the chemistry match history already loaded by the app. It must add no database schema, persistence, or matchmaking changes. The calculation will expose the pair score plus the shared-match count, then the UI will filter it to the selected player and sort it in both directions.

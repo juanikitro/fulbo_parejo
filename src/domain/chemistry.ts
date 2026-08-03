@@ -13,6 +13,13 @@ export type ChemistryPair = {
   matches: number
 }
 
+export function chemistryExtremes<T extends ChemistryPair>(pairs: readonly T[], limit = 3) {
+  const strongest = [...pairs].sort((first, second) => second.score - first.score).slice(0, limit)
+  const strongestPairs = new Set(strongest)
+  const weakest = pairs.filter((pair) => !strongestPairs.has(pair)).sort((first, second) => first.score - second.score).slice(0, limit)
+  return { strongest, weakest }
+}
+
 const CONFIDENCE_MATCHES = 4
 
 const keyForPair = (first: string, second: string) => first < second ? `${first}\u0000${second}` : `${second}\u0000${first}`
