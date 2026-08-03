@@ -3,6 +3,7 @@ import type { ChemistryMatch } from '../domain/chemistry'
 import type { Player, Position, Team } from '../domain/types'
 import type { PerformanceRating, RecordedResult } from '../domain/elo'
 import { supabase } from './supabase'
+import type { RosterAccessEntry } from './rosterAccess'
 
 type PlayerRow = {
   id: string
@@ -79,6 +80,15 @@ export async function isRosterOwner(rosterId: string, userId: string) {
   const response = await client().from('rosters').select('id').eq('id', rosterId).eq('owner_id', userId).maybeSingle()
   if (response.error) throw response.error
   return Boolean(response.data)
+}
+
+export async function loadRosterAccess(rosterId: string): Promise<RosterAccessEntry[]> {
+  const response = await client().rpc('list_roster_access', { p_roster_id: rosterId })
+  if (response.error) throw response.error
+  return ((response.data ?? []) as Array<{ display_name: string; access_role: RosterAccessEntry['role'] }>).map((entry) => ({
+    displayName: entry.display_name?.trim() || 'Sin nombre visible',
+    role: entry.access_role,
+  }))
 }
 
 export async function createRosterInvitation(rosterId: string) {
