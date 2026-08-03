@@ -3,7 +3,7 @@ import { chemistryFromHistory, type PairChemistry } from './domain/chemistry'
 import { groupCallupPlayers } from './domain/callup'
 import { performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
-import { isGoalkeeper, operationalRating, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
+import { isGoalkeeper, operationalRating, partitionPlayers, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
 import { acceptRosterInvitation, createPlayer, createRosterInvitation, ensureRoster, isRosterOwner, loadAccessibleRosters, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, manageMatchHistory, recordMatch, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
@@ -51,8 +51,17 @@ function TabLoader({ label = 'Cargando…', panel = false }: { label?: string; p
   return <section className={`${panel ? 'panel ' : ''}tab-loader`} role="status" aria-live="polite"><span aria-hidden="true">⚽</span><p>{label}</p></section>
 }
 
-function NoticeToast({ message, onClose }: { message: string; onClose: () => void }) {
-  return <aside className="notice-toast" role="status" aria-live="polite"><span className="notice-toast-icon" aria-hidden="true">✦</span><p>{message}</p><button type="button" aria-label="Cerrar notificación" onClick={onClose}>×</button></aside>
+function NoticeToast({ message, onClose, actionLabel, onAction, actionDisabled = false }: { message: string; onClose: () => void; actionLabel?: string; onAction?: () => void; actionDisabled?: boolean }) {
+  return <aside className="notice-toast" role="status" aria-live="polite"><span className="notice-toast-icon" aria-hidden="true">✦</span><p>{message}</p>{actionLabel && onAction && <button type="button" className="notice-toast-action" disabled={actionDisabled} onClick={onAction}>{actionLabel}</button>}<button type="button" aria-label="Cerrar notificación" onClick={onClose}>×</button></aside>
+}
+
+function ArchivePlayerDialog({ player, saving, onClose, onConfirm }: { player: Player; saving: boolean; onClose: () => void; onConfirm: () => void }) {
+  return <div className="modal-backdrop" onMouseDown={onClose}>
+    <section className="result-modal archive-dialog" role="alertdialog" aria-modal="true" aria-labelledby="archive-player-title" aria-describedby="archive-player-description" onMouseDown={(event) => event.stopPropagation()}>
+      <p className="eyebrow">PAPELERA</p><h2 id="archive-player-title">¿Enviar a {player.name} a la papelera?</h2><p id="archive-player-description">Dejará de aparecer en las convocatorias. Podés restaurarlo cuando quieras.</p>
+      <div className="modal-actions"><button type="button" className="cancel-button" autoFocus disabled={saving} onClick={onClose}>Cancelar</button><button type="button" className="save-player" disabled={saving} onClick={onConfirm}>{saving ? 'Archivando…' : 'Enviar a la papelera'}</button></div>
+    </section>
+  </div>
 }
 
 function PlayerEditor({
@@ -239,12 +248,21 @@ export default function App() {
   const [ratingInfoOpen, setRatingInfoOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [archiveCandidate, setArchiveCandidate] = useState<Player | null>(null)
+  const [archiveNotice, setArchiveNotice] = useState<Player | null>(null)
+  const [archivingPlayerId, setArchivingPlayerId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!message) return
     const timeout = window.setTimeout(() => setMessage(null), 5000)
     return () => window.clearTimeout(timeout)
   }, [message])
+
+  useEffect(() => {
+    if (!archiveNotice) return
+    const timeout = window.setTimeout(() => setArchiveNotice(null), 10000)
+    return () => window.clearTimeout(timeout)
+  }, [archiveNotice])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -326,7 +344,7 @@ export default function App() {
     return () => { live = false }
   }, [rosterId, userId])
 
-  const active = players.filter((player) => !player.archived)
+  const { activePlayers: active, archivedPlayers } = partitionPlayers(players)
   const selectedPlayers = players.filter((player) => selected.has(player.id) && !player.archived)
   const mean = (team: Team) => team.operationalRating / team.players.length
   const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
@@ -423,9 +441,35 @@ export default function App() {
       discardProposal(); setEditorOpen(false); setEditingPlayer(null); setDraft(blankDraft); if (resetLearning) setMessage('Media base actualizada: se reinició el aprendizaje para mantener el historial consistente.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar el jugador.') } finally { setSaving(false) }
   }
-  const archive = async (player: Player) => {
-    if (!window.confirm(`¿Archivar a ${player.name}? Podés recuperarlo luego desde la base de datos.`)) return
-    try { await setArchived(player.id, true); setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: true } : entry)); setSelected((current) => { const next = new Set(current); next.delete(player.id); return next }); discardProposal() } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo archivar el jugador.') }
+  const archive = async () => {
+    if (!archiveCandidate) return
+    const player = archiveCandidate
+    const wasSelected = selected.has(player.id)
+    setArchiveCandidate(null); setArchivingPlayerId(player.id)
+    setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: true } : entry))
+    setSelected((current) => { const next = new Set(current); next.delete(player.id); return next })
+    try {
+      await setArchived(player.id, true)
+      discardProposal()
+      setArchiveNotice(player)
+    } catch (error) {
+      setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: false } : entry))
+      if (wasSelected) setSelected((current) => new Set(current).add(player.id))
+      setMessage(error instanceof Error ? error.message : 'No se pudo archivar el jugador. Revisá tu conexión e intentá de nuevo.')
+    } finally { setArchivingPlayerId(null) }
+  }
+  const restore = async (player: Player) => {
+    setArchivingPlayerId(player.id)
+    setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: false } : entry))
+    try {
+      await setArchived(player.id, false)
+      if (archiveNotice?.id === player.id) setArchiveNotice(null)
+      setMessage(`${player.name} volvió al plantel.`)
+    } catch (error) {
+      setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: true } : entry))
+      if (archiveNotice?.id === player.id) setArchiveNotice(null)
+      setMessage(error instanceof Error ? error.message : 'No se pudo restaurar el jugador. Revisá tu conexión e intentá de nuevo.')
+    } finally { setArchivingPlayerId(null) }
   }
   const record = async (result: RecordedResult) => {
     if (!proposal || !rosterId) return
@@ -482,9 +526,9 @@ export default function App() {
   if (!userId) return <main className="landing-shell">{message && <NoticeToast message={message} onClose={() => setMessage(null)} />}<Suspense fallback={<TabLoader label="Armando la portada…" />}><LandingPage onLogin={() => void login()} themeControl={<ThemeSelector preference={themePreference} onChange={changeThemePreference} />} /></Suspense></main>
 
   return <main className="app-shell">
-    {message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
+    {archiveNotice ? <NoticeToast message={`${archiveNotice.name} fue enviado a la papelera`} actionLabel={archivingPlayerId === archiveNotice.id ? 'Restaurando…' : 'Deshacer'} actionDisabled={archivingPlayerId === archiveNotice.id} onAction={() => void restore(archiveNotice)} onClose={() => setArchiveNotice(null)} /> : message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
     <header className="topbar"><h1>Fulbo<em>Parejo</em></h1><div className="header-actions"><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{isOwner && <button className="invite-button" aria-label="Invitar al plantel" title="Invitar al plantel" disabled={saving} onClick={() => void invite()}>🔗</button>}<button className="logout-button" aria-label="Salir" title="Salir" disabled={saving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
-    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} players={players} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={archive} onExport={() => downloadJson(players)} /></Suspense>}
+    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
     {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
       {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <small>Δ {fmt(proposal.balanceGap)}</small></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section>{proposal.unassigned && <p className="unassigned">No asignado para maximizar equilibrio: <strong>{proposal.unassigned.name}</strong></p>}<section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>)}
     {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab history={history} saving={saving} hasMore={historyHasMore} loadingMore={historyLoadingMore} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} onLoadMore={loadMoreHistory} /></Suspense>}
@@ -493,6 +537,7 @@ export default function App() {
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} history={playerMatchHistory} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
+    {archiveCandidate && <ArchivePlayerDialog player={archiveCandidate} saving={archivingPlayerId === archiveCandidate.id} onClose={() => setArchiveCandidate(null)} onConfirm={() => void archive()} />}
     <footer className="cafecito-support"><a href="https://cafecito.app/juanikitro" rel="noopener noreferrer" target="_blank">☕ <span>Doname un cafecito</span><span aria-hidden="true">↗</span></a></footer>
     <nav className="bottom-nav">{([['squad', '👥', 'Plantel'], ['match', '⚽', 'Nuevo partido'], ['history', '📋', 'Historial']] as const).map(([key, icon, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}><span>{icon}</span>{label}</button>)}</nav>
   </main>
