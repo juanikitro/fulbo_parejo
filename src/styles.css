@@ -195,3 +195,12 @@ html[data-theme='dark'] .landing-cover, html[data-theme='dark'] .landing-closing
 html[data-theme='dark'] .landing-eyebrow, html[data-theme='dark'] .landing-dropcap::first-letter, html[data-theme='dark'] .landing-rows h4 span { color: #ff8f74; }
 html[data-theme='dark'] .landing-note { color: #8fa391; }
 html[data-theme='dark'] .roster-switcher select, html[data-theme='dark'] .history-more-button { border-color: #3c5142; background: #1b2a20; color: #edf4ed; }
+
+.squad-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(132px, .52fr); gap: 9px; margin-top: 16px; }
+.squad-control { display: grid; gap: 5px; color: #526857; font: 800 11px 'DM Mono', monospace; }
+.squad-control input, .squad-control select { width: 100%; min-height: 42px; border: 1px solid #d9d4bf; border-radius: 9px; background: #fffdf5; color: #172018; padding: 9px 10px; font: 700 13px Manrope, sans-serif; }
+.squad-control input:focus, .squad-control select:focus { outline: 3px solid #f2b13f; outline-offset: 2px; }
+.squad-empty { padding: 8px 0 3px; }
+html[data-theme='dark'] .squad-control { color: #b8c8ba; }
+html[data-theme='dark'] .squad-control input, html[data-theme='dark'] .squad-control select { border-color: #3c5142; background: #1b2a20; color: #edf4ed; }
+@media (max-width: 420px) { .squad-controls { grid-template-columns: 1fr; } }
