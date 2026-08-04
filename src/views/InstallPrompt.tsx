@@ -1,33 +1,51 @@
 import { useEffect, useState } from 'react'
-import { canShowInstallPrompt, deferInstallPrompt, installInstructions, isInstallPromptDeferred, isInstalledApp, promptForInstall, subscribeToInstallAvailability } from '../lib/pwaInstall'
+import { canShowInstallReminder, deferInstallPrompt, installInstructions, isAppleMobile, isInstallPromptDeferred, isInstalledApp, promptForInstall, subscribeToInstallAvailability } from '../lib/pwaInstall'
 
 function storage() {
   try { return window.localStorage } catch { return null }
 }
-export default function InstallPrompt({ authenticated }: { authenticated: boolean }) {
-  const [visible, setVisible] = useState(false)
+export function InstallAppButton({ onOpen }: { onOpen: () => void }) {
+  const [installed, setInstalled] = useState(() => isInstalledApp())
+
+  useEffect(() => {
+    const media = window.matchMedia('(display-mode: standalone)')
+    const sync = () => setInstalled(isInstalledApp())
+    media.addEventListener('change', sync)
+    window.addEventListener('appinstalled', sync)
+    return () => { media.removeEventListener('change', sync); window.removeEventListener('appinstalled', sync) }
+  }, [])
+
+  if (installed) return null
+  return <button type="button" className="install-app-button" aria-label="Instalar Fulbo Parejo como app" title="Instalar app" onClick={onOpen}><span aria-hidden="true">↓</span> Instalar</button>
+}
+
+type InstallPromptProps = {
+  authenticated: boolean
+  afterMilestone: boolean
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+}
+
+export default function InstallPrompt({ authenticated, afterMilestone, open, onOpen, onClose }: InstallPromptProps) {
   const [nativePromptAvailable, setNativePromptAvailable] = useState(false)
 
   useEffect(() => subscribeToInstallAvailability(setNativePromptAvailable), [])
 
   useEffect(() => {
-    if (!canShowInstallPrompt({ authenticated, installed: isInstalledApp(), deferred: isInstallPromptDeferred(storage()) })) {
-      setVisible(false)
-      return
-    }
-    setVisible(true)
-  }, [authenticated])
+    if (canShowInstallReminder({ afterMilestone, authenticated, installed: isInstalledApp(), deferred: isInstallPromptDeferred(storage()) })) onOpen()
+  }, [afterMilestone, authenticated, onOpen])
 
   useEffect(() => {
-    if (!visible) return
+    if (!open) return
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss() }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  })
+  }, [open])
 
   const dismiss = () => {
     deferInstallPrompt(storage())
-    setVisible(false)
+    onClose()
   }
 
   const install = async () => {
@@ -35,8 +53,9 @@ export default function InstallPrompt({ authenticated }: { authenticated: boolea
     if (outcome !== 'unavailable') dismiss()
   }
 
-  if (!visible) return null
+  if (!open) return null
   const instructions = installInstructions(navigator.userAgent, navigator.maxTouchPoints)
+  const appleMobile = isAppleMobile(navigator.userAgent, navigator.maxTouchPoints)
 
   return <div className="modal-backdrop install-prompt-backdrop" onMouseDown={dismiss}>
     <section className="result-modal install-prompt" role="dialog" aria-modal="true" aria-labelledby="install-prompt-title" aria-describedby="install-prompt-description" onMouseDown={(event) => event.stopPropagation()}>
@@ -44,7 +63,9 @@ export default function InstallPrompt({ authenticated }: { authenticated: boolea
       <p className="eyebrow">FULBO PAREJO</p>
       <h2 id="install-prompt-title">Llevalo a tu inicio</h2>
       <p id="install-prompt-description">Abrí Fulbo Parejo como una app, sin buscarlo cada vez en el navegador.</p>
-      {nativePromptAvailable
+      {appleMobile
+        ? <ol className="install-prompt-steps"><li><span aria-hidden="true">↑</span><p>En <strong>Safari</strong>, tocá <strong>Compartir</strong>.</p></li><li><span aria-hidden="true">＋</span><p>Elegí <strong>Agregar a pantalla de inicio</strong> y confirmá.</p></li></ol>
+        : nativePromptAvailable
         ? <p className="install-prompt-hint">Te va a aparecer la confirmación del navegador.</p>
         : <p className="install-prompt-hint">{instructions}</p>}
       <div className="modal-actions">

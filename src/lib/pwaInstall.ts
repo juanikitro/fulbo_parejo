@@ -60,6 +60,10 @@ export function canShowInstallPrompt({ authenticated, installed, deferred }: { a
   return authenticated && !installed && !deferred
 }
 
+export function canShowInstallReminder({ afterMilestone, authenticated, installed, deferred }: { afterMilestone: boolean; authenticated: boolean; installed: boolean; deferred: boolean }) {
+  return afterMilestone && canShowInstallPrompt({ authenticated, installed, deferred })
+}
+
 export function deferInstallPrompt(storage: Storage | null, now = Date.now()) {
   if (!storage) return
   try {
@@ -69,9 +73,12 @@ export function deferInstallPrompt(storage: Storage | null, now = Date.now()) {
   }
 }
 
+export function isAppleMobile(userAgent: string, maxTouchPoints = 0) {
+  return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && maxTouchPoints > 1)
+}
+
 export function installInstructions(userAgent: string, maxTouchPoints = 0) {
-  const isAppleMobile = /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && maxTouchPoints > 1)
-  if (isAppleMobile) return 'Abrí Fulbo Parejo en Safari, tocá Compartir y elegí “Agregar a pantalla de inicio”.'
+  if (isAppleMobile(userAgent, maxTouchPoints)) return 'Abrí Fulbo Parejo en Safari, tocá Compartir y elegí “Agregar a pantalla de inicio”.'
   if (/Android/i.test(userAgent)) return 'Abrí el menú ⋮ del navegador y elegí “Instalar app” o “Agregar a pantalla principal”.'
   return 'Abrí el menú del navegador y elegí “Instalar Fulbo Parejo” o “Instalar esta aplicación”.'
 }

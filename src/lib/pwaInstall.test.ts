@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canShowInstallPrompt, deferInstallPrompt, installInstructions, installPromptDeferralMs, isInstallPromptDeferred } from './pwaInstall'
+import { canShowInstallReminder, canShowInstallPrompt, deferInstallPrompt, installInstructions, installPromptDeferralMs, isInstallPromptDeferred } from './pwaInstall'
 
 function storage() {
   const values = new Map<string, string>()
@@ -10,8 +10,13 @@ function storage() {
 }
 
 describe('PWA installation prompt', () => {
-  it('shows the popup for an authenticated session without a deferral, even without a native prompt event', () => {
+  it('allows the persistent installation action for an authenticated session without a deferral', () => {
     expect(canShowInstallPrompt({ authenticated: true, installed: false, deferred: false })).toBe(true)
+  })
+
+  it('shows the automatic reminder only after the first useful action', () => {
+    expect(canShowInstallReminder({ afterMilestone: false, authenticated: true, installed: false, deferred: false })).toBe(false)
+    expect(canShowInstallReminder({ afterMilestone: true, authenticated: true, installed: false, deferred: false })).toBe(true)
   })
 
   it('defers a dismissed promotion for 30 days', () => {
@@ -35,6 +40,8 @@ describe('PWA installation prompt', () => {
   })
 
   it('shows iOS instructions when a native prompt is unavailable', () => {
-    expect(installInstructions('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)')).toContain('Safari')
+    const instructions = installInstructions('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)')
+    expect(instructions).toContain('Safari')
+    expect(instructions).toContain('Compartir')
   })
 })
