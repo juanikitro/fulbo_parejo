@@ -72,7 +72,7 @@ export default function LandingPage({ onLogin, themeControl }: { onLogin: () => 
         <p className="landing-kicker">PARA EL PARTIDO DE LOS AMIGOS</p>
         <h2 className="landing-headline">Se terminaron los <em>equipos desparejos</em></h2>
         <p className="landing-lead">FulboParejo arma los equipos por vos: aprende de cada resultado y reparte la cancha para que el partido salga parejo.</p>
-        <div className="landing-cta"><GoogleButton onLogin={onLogin} /><p className="landing-cta-note">Entrás con Google y listo. Tu plantel queda privado, sin instalar nada.</p></div>
+        <div className="landing-cta"><p className="landing-cta-note">Vas a continuar en la ventana segura de Google. Google no comparte tu contraseña con Fulbo Parejo.</p><GoogleButton onLogin={onLogin} /><p className="landing-cta-note">Tu plantel queda privado, sin instalar nada.</p></div>
       </div>
     </section>
 
@@ -135,7 +135,7 @@ export default function LandingPage({ onLogin, themeControl }: { onLogin: () => 
         <h3 className="landing-closing-title">El plantel te está esperando</h3>
         <p>Cargalo una vez, armá el primer partido y dejá que el resto lo aprenda la cancha.</p>
         <GoogleButton onLogin={onLogin} />
-        <p className="landing-cta-note">Gratis, sin instalación. Tu plantel, tus partidos y tu historial son solo tuyos.</p>
+        <p className="landing-cta-note">Vas a continuar en Google de forma segura. Gratis, sin instalación: tu plantel, tus partidos y tu historial son solo tuyos.</p>
       </div>
     </section>
 
