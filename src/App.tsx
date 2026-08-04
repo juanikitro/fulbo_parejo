@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { chemistryExtremes, chemistryFromHistory, chemistryPairsFromHistory, chemistryWithSufficientEvidence, type ChemistryPair, type PairChemistry } from './domain/chemistry'
 import { groupCallupPlayers } from './domain/callup'
 import { performanceLevels, type PerformanceRating, type RecordedResult } from './domain/elo'
+import { initialRatingValidationMessage, parseInitialRating } from './domain/initialRating'
 import { createMatchProposal, findComparableSwap } from './domain/matchmaking'
 import { describeMatchProposal } from './domain/matchmakingExplanation'
 import { isGoalkeeper, operationalRating, partitionPlayers, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
@@ -27,7 +28,7 @@ type ThemePreference = 'system' | 'light' | 'dark'
 
 const themeStorageKey = 'fulbo-parejo-theme-preference'
 const fmt = (value: number) => value.toFixed(2)
-const blankDraft = { name: '', baseRating: '6', preferredPosition: '', icon: playerIcons[0], color: playerColors[0] }
+const blankDraft = { name: '', baseRating: '60', preferredPosition: '', icon: playerIcons[0], color: playerColors[0] }
 // U+FE0E prevents Safari on iPhone from rendering diagonal arrows as colored emoji.
 const performanceSymbols: Record<PerformanceRating, string> = { '-2': '↓︎', '-1': '↘︎', 0: '−', 1: '↗︎', 2: '↑︎' }
 
@@ -112,7 +113,19 @@ function PlayerEditor({
     <form className="player-form player-modal" role="dialog" aria-modal="true" aria-labelledby="player-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={onSubmit}>
       <div className="form-heading"><div><p className="eyebrow">{editingPlayer ? 'EDITAR JUGADOR' : 'NUEVO JUGADOR'}</p><h2 id="player-editor-title">{editingPlayer ? editingPlayer.name : 'Sumá al plantel'}</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <label className="field-label">🧑 Nombre<input autoFocus placeholder="Ej. Juan" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></label>
-      <label className="field-label">⭐ Media inicial<input type="number" step="any" value={draft.baseRating} onChange={(event) => onChange({ ...draft, baseRating: event.target.value })} /></label>
+      <label className="field-label">
+        ⭐ Media inicial (0 a 100)
+        <input
+          type="number"
+          min="0"
+          max="100"
+          step="1"
+          aria-describedby="initial-rating-help"
+          value={draft.baseRating}
+          onChange={(event) => onChange({ ...draft, baseRating: event.target.value })}
+        />
+        <small id="initial-rating-help">Cargá una estimación del nivel actual. Es el punto de partida: después de los partidos, la media aprendida puede subir o bajar incluso fuera de este rango.</small>
+      </label>
       <fieldset className="picker-field"><legend>⚽ Posición preferida</legend><div className="position-picker" role="group" aria-label="Posición preferida"><button type="button" className={!draft.preferredPosition ? 'selected' : ''} aria-pressed={!draft.preferredPosition} onClick={() => onChange({ ...draft, preferredPosition: '' })}>Sin posición</button>{positions.map((position) => <button type="button" className={draft.preferredPosition === position ? 'selected' : ''} aria-label={`Usar ${position}: ${positionLabel[position]}`} aria-pressed={draft.preferredPosition === position} key={position} onClick={() => onChange({ ...draft, preferredPosition: position })}><strong>{position}</strong><span>{positionLabel[position]}</span></button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🙂 Ícono</legend><div className="icon-picker">{playerIcons.map((icon) => <button type="button" className={draft.icon === icon ? 'selected' : ''} aria-label={`Usar ${icon}`} aria-pressed={draft.icon === icon} key={icon} onClick={() => onChange({ ...draft, icon })}>{icon}</button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🎨 Color <span className="color-value">{draft.color}</span></legend><div className="color-picker">{playerColors.map((color) => <button type="button" className={draft.color === color ? 'selected' : ''} aria-label={`Usar color ${color}`} aria-pressed={draft.color === color} key={color} onClick={() => onChange({ ...draft, color })}><i style={{ backgroundColor: color }} /></button>)}</div></fieldset>
@@ -172,7 +185,12 @@ function RatingInfo({ onClose }: { onClose: () => void }) {
     <section className="result-modal rating-info-modal" role="dialog" aria-modal="true" aria-labelledby="rating-info-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="form-heading"><div><p className="eyebrow">GUÍA DEL SISTEMA</p><h2 id="rating-info-title">Cómo funciona Fulbo Parejo</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <div className="rating-info-content">
-        <section><h3>La media que usa la app</h3><p><strong>Media base:</strong> la que cargás manualmente para cada jugador. <strong>Media aprendida:</strong> la que se actualiza después de cada partido.</p><p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p><p className="rating-formula">40% media base + 60% media aprendida</p></section>
+        <section>
+          <h3>La media que usa la app</h3>
+          <p><strong>Media inicial:</strong> la que cargás manualmente para cada jugador, entre 0 y 100. Es un punto de partida, no un techo. <strong>Media aprendida:</strong> se actualiza después de cada partido y puede subir o bajar incluso fuera de ese rango.</p>
+          <p><strong>Media operativa:</strong> es la que usa Nuevo partido para equilibrar los equipos.</p>
+          <p className="rating-formula">40% media base + 60% media aprendida</p>
+        </section>
         <section><h3>Cómo se arman los equipos</h3><p>La app divide a los convocados en dos equipos de la misma cantidad y busca reducir al mínimo la diferencia entre sus medias operativas.</p><p><strong>Posiciones y arqueros:</strong> se tienen en cuenta como un ajuste suave. Si hay dos o más PO, intenta dejar uno por equipo; si hay uno solo, compensa al equipo que queda sin arquero. Las demás posiciones ayudan a repartir líneas y puestos, pero no son una formación obligatoria.</p><p><strong>Cantidad impar:</strong> prueba dejar fuera a cada convocado y elige al no asignado que permite el armado más equilibrado. No aplica rotación automática.</p></section>
         <section><h3>Cómo funciona el Elo</h3><p>Antes del partido se comparan las medias operativas promedio de ambos equipos. Ganarle a un equipo que era favorito suma más; perder contra uno más fuerte resta menos.</p><p>El empate también modifica las medias: el equipo que llegaba como menos favorito puede subir y el favorito bajar.</p><p><strong>Diferencia de goles:</strong> una victoria más amplia aumenta el cambio de Elo de forma gradual, con un tope para que una goleada no descontrole las medias.</p></section>
         <section><h3>Cómo jugó cada uno</h3><p>Al registrar el resultado, la valoración individual ajusta solamente el cambio de Elo de ese jugador en ese partido.</p><ul className="performance-explanation"><li><strong>Muy mal:</strong> 50% de lo que suma o 150% de lo que resta.</li><li><strong>Mal:</strong> 75% de lo que suma o 125% de lo que resta.</li><li><strong>Normal:</strong> 100% del cambio.</li><li><strong>Bien:</strong> 125% de lo que suma o 75% de lo que resta.</li><li><strong>Muy bien:</strong> 150% de lo que suma o 50% de lo que resta.</li></ul><p>Por eso, jugar <strong>muy bien</strong> potencia una victoria y amortigua una derrota; jugar <strong>muy mal</strong> hace lo contrario.</p></section>
@@ -540,8 +558,8 @@ export default function App() {
   const closePlayerDetail = () => { detailRequest.current += 1; setDetailPlayer(null); setPlayerMatchHistory([]); setPlayerHistoryError(null) }
   const savePlayer = async (event: React.FormEvent) => {
     event.preventDefault(); if (!rosterId || !draft.name.trim()) return
-    const rating = Number(draft.baseRating)
-    if (!draft.baseRating.trim() || !Number.isFinite(rating)) { setMessage('Ingresá una media numérica válida.'); return }
+    const rating = parseInitialRating(draft.baseRating)
+    if (rating === null) { setMessage(initialRatingValidationMessage); return }
     setSaving(true)
     try {
       const resetLearning = Boolean(editingPlayer && editingPlayer.baseRating !== rating)
