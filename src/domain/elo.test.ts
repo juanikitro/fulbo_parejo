@@ -17,6 +17,13 @@ describe('applyEloResult', () => {
     expect(expectedLossAgainstFifty).toBeLessThan(-0.01)
   })
 
+  it('allows a learned rating to continue above 100', () => {
+    const experienced = { ...player('experienced', 100), learnedRating: 105 }
+    const update = applyEloResult([experienced], [player('challenger', 60)], 'teamOne').get('experienced')!
+
+    expect(update).toBeGreaterThan(105)
+  })
+
   it('rewards an upset more than an expected win', () => {
     const strong = [player('strong', 9)]
     const weak = [player('weak', 5)]
