@@ -59,7 +59,7 @@ export default function InstallPrompt({ authenticated, afterMilestone, open, onO
 
   return <div className="modal-backdrop install-prompt-backdrop" onMouseDown={dismiss}>
     <section className="result-modal install-prompt" role="dialog" aria-modal="true" aria-labelledby="install-prompt-title" aria-describedby="install-prompt-description" onMouseDown={(event) => event.stopPropagation()}>
-      <span className="install-prompt-icon" aria-hidden="true">⚽</span>
+      <img className="install-prompt-icon" src="/pwa-icon-192.png" alt="" />
       <p className="eyebrow">FULBO PAREJO</p>
       <h2 id="install-prompt-title">Llevalo a tu inicio</h2>
       <p id="install-prompt-description">Abrí Fulbo Parejo como una app, sin buscarlo cada vez en el navegador.</p>
