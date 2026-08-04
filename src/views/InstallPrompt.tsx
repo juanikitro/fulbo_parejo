@@ -16,7 +16,7 @@ export function InstallAppButton({ onOpen }: { onOpen: () => void }) {
   }, [])
 
   if (installed) return null
-  return <button type="button" className="install-app-button" aria-label="Instalar Fulbo Parejo como app" title="Instalar app" onClick={onOpen}><span aria-hidden="true">↓</span> Instalar</button>
+  return <button type="button" className="header-icon-button install-app-button" aria-label="Instalar Fulbo Parejo como app" title="Instalar app" onClick={onOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4" /></svg></button>
 }
 
 type InstallPromptProps = {
