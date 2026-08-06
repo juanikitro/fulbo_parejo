@@ -6,7 +6,12 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 export const supabase = url && key ? createClient(url, key) : null
 
 export function authRedirectUrl(configuredUrl: string | undefined, currentOrigin = window.location.origin) {
-  return configuredUrl?.trim() || currentOrigin
+  const redirectTo = configuredUrl?.trim() || currentOrigin
+  const invite = new URL(currentOrigin).searchParams.get('invite')
+  if (!invite) return redirectTo
+  const redirectUrl = new URL(redirectTo)
+  redirectUrl.searchParams.set('invite', invite)
+  return redirectUrl.toString()
 }
 
 export async function signInWithGoogle(redirectTo = authRedirectUrl(import.meta.env.VITE_SITE_URL)) {
