@@ -82,7 +82,8 @@ begin
 end;
 $$;
 
-create or replace function public.list_roster_access(p_roster_id uuid)
+drop function public.list_roster_access(uuid);
+create function public.list_roster_access(p_roster_id uuid)
 returns table (user_id uuid, display_name text, access_role text)
 language sql stable security definer set search_path = '' as $$
   select roster.owner_id, coalesce(nullif(trim(owner_user.raw_user_meta_data ->> 'full_name'), ''), nullif(trim(owner_user.raw_user_meta_data ->> 'name'), ''), 'Sin nombre visible'), 'owner'::text
