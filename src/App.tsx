@@ -118,9 +118,10 @@ function PlayerEditor({
     <form className="player-form player-modal" role="dialog" aria-modal="true" aria-labelledby="player-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={onSubmit}>
       <div className="form-heading"><div><p className="eyebrow">{editingPlayer ? 'EDITAR JUGADOR' : 'NUEVO JUGADOR'}</p><h2 id="player-editor-title">{editingPlayer ? editingPlayer.name : 'Sumá al plantel'}</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       <label className="field-label">🧑 Nombre<input autoFocus placeholder="Ej. Juan" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></label>
-      <label className="field-label">
-        ⭐ Media inicial (0 a 100)
+      <div className="field-label">
+        <div className="field-label-title"><label htmlFor="initial-rating">⭐ Media inicial (0 a 100)</label><details className="rating-help"><summary aria-label="Ver ayuda sobre la media inicial">i</summary><small id="initial-rating-help">Cargá una estimación del nivel actual. Es el punto de partida: después de los partidos, la media aprendida puede subir o bajar incluso fuera de este rango.</small></details></div>
         <input
+          id="initial-rating"
           type="number"
           min="0"
           max="100"
@@ -129,8 +130,7 @@ function PlayerEditor({
           value={draft.baseRating}
           onChange={(event) => onChange({ ...draft, baseRating: event.target.value })}
         />
-        <small id="initial-rating-help">Cargá una estimación del nivel actual. Es el punto de partida: después de los partidos, la media aprendida puede subir o bajar incluso fuera de este rango.</small>
-      </label>
+      </div>
       <fieldset className="picker-field"><legend>⚽ Posición preferida</legend><div className="position-picker" role="group" aria-label="Posición preferida"><button type="button" className={!draft.preferredPosition ? 'selected' : ''} aria-pressed={!draft.preferredPosition} onClick={() => onChange({ ...draft, preferredPosition: '' })}>Sin posición</button>{positions.map((position) => <button type="button" className={draft.preferredPosition === position ? 'selected' : ''} aria-label={`Usar ${position}: ${positionLabel[position]}`} aria-pressed={draft.preferredPosition === position} key={position} onClick={() => onChange({ ...draft, preferredPosition: position })}><strong>{position}</strong><span>{positionLabel[position]}</span></button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🙂 Ícono</legend><div className="icon-picker">{playerIcons.map((icon) => <button type="button" className={draft.icon === icon ? 'selected' : ''} aria-label={`Usar ${icon}`} aria-pressed={draft.icon === icon} key={icon} onClick={() => onChange({ ...draft, icon })}>{icon}</button>)}</div></fieldset>
       <fieldset className="picker-field"><legend>🎨 Color <span className="color-value">{draft.color}</span></legend><div className="color-picker">{playerColors.map((color) => <button type="button" className={draft.color === color ? 'selected' : ''} aria-label={`Usar color ${color}`} aria-pressed={draft.color === color} key={color} onClick={() => onChange({ ...draft, color })}><i style={{ backgroundColor: color }} /></button>)}</div></fieldset>
