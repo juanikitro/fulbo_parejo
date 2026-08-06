@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { buildRosterInvitationUrl, buildWhatsAppInvitationText, buildWhatsAppInvitationUrl, canManageRosterAccess, generateWhatsAppInvitation, runOnce } from './rosterAccess'
+import { buildRosterInvitationUrl, buildWhatsAppInvitationText, buildWhatsAppInvitationUrl, canInviteRole, canManageRosterAccess, generateWhatsAppInvitation, runOnce } from './rosterAccess'
 
 describe('roster access invitations', () => {
-  it('only enables access management for the roster owner', () => {
-    expect(canManageRosterAccess(true)).toBe(true)
-    expect(canManageRosterAccess(false)).toBe(false)
+  it('enables access management for the owner and technical staff', () => {
+    expect(canManageRosterAccess('owner')).toBe(true)
+    expect(canManageRosterAccess('technical')).toBe(true)
+    expect(canManageRosterAccess('player')).toBe(false)
+  })
+
+  it('limits invitations to the roles each actor can grant', () => {
+    expect(canInviteRole('owner', 'technical')).toBe(true)
+    expect(canInviteRole('owner', 'player')).toBe(true)
+    expect(canInviteRole('technical', 'technical')).toBe(false)
+    expect(canInviteRole('technical', 'player')).toBe(true)
+    expect(canInviteRole('player', 'player')).toBe(false)
   })
 
   it('builds the invitation link and WhatsApp text without exposing the token elsewhere', () => {

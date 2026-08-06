@@ -1,9 +1,13 @@
+export type RosterRole = 'owner' | 'technical' | 'player'
 export type RosterAccessEntry = {
+  userId: string
   displayName: string
-  role: 'owner' | 'member'
+  role: RosterRole
 }
 
-export const canManageRosterAccess = (isOwner: boolean) => isOwner
+export const canManageRosterAccess = (role: RosterRole | null) => role === 'owner' || role === 'technical'
+export const canEditRoster = (role: RosterRole | null) => role === 'owner' || role === 'technical'
+export const canInviteRole = (actor: RosterRole | null, invited: Exclude<RosterRole, 'owner'>) => actor === 'owner' || (actor === 'technical' && invited === 'player')
 
 export function buildRosterInvitationUrl(origin: string, pathname: string, token: string) {
   const url = new URL(pathname, origin)
