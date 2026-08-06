@@ -2,7 +2,7 @@ import type { ChemistryMatch } from '../domain/chemistry'
 import type { Player, Position, Team } from '../domain/types'
 import type { PerformanceRating, RecordedResult } from '../domain/elo'
 import { supabase } from './supabase'
-import type { RosterAccessEntry } from './rosterAccess'
+import type { RosterAccessEntry, RosterRole } from './rosterAccess'
 
 type PlayerRow = {
   id: string
@@ -100,21 +100,44 @@ export async function isRosterOwner(rosterId: string, userId: string) {
   return Boolean(response.data)
 }
 
+export async function loadRosterRole(rosterId: string, userId: string): Promise<RosterRole | null> {
+  if (await isRosterOwner(rosterId, userId)) return 'owner'
+  const response = await client().from('roster_access').select('role').eq('roster_id', rosterId).eq('user_id', userId).maybeSingle()
+  if (response.error) throw response.error
+  return response.data?.role === 'technical' || response.data?.role === 'player' ? response.data.role : null
+}
+
 export async function loadRosterAccess(rosterId: string): Promise<RosterAccessEntry[]> {
   const response = await client().rpc('list_roster_access', { p_roster_id: rosterId })
   if (response.error) throw response.error
-  return ((response.data ?? []) as Array<{ display_name: string; access_role: RosterAccessEntry['role'] }>).map((entry) => ({
+  return ((response.data ?? []) as Array<{ user_id: string; display_name: string; access_role: RosterAccessEntry['role'] }>).map((entry) => ({
+    userId: entry.user_id,
     displayName: entry.display_name?.trim() || 'Sin nombre visible',
     role: entry.access_role,
   }))
 }
 
-export async function createRosterInvitation(rosterId: string) {
-  const response = await client().rpc('create_roster_invitation', { p_roster_id: rosterId })
+export async function createRosterInvitation(rosterId: string, role: Exclude<RosterRole, 'owner'>) {
+  const response = await client().rpc('create_roster_invitation', { p_roster_id: rosterId, p_role: role })
   if (response.error) throw response.error
   const row = (response.data as Array<{ token: string; expires_at: string }>)[0]
   if (!row) throw new Error('No se pudo crear la invitación.')
   return row
+}
+
+export async function updateRosterAccessRole(rosterId: string, userId: string, role: Exclude<RosterRole, 'owner'>) {
+  const response = await client().rpc('update_roster_access_role', { p_roster_id: rosterId, p_user_id: userId, p_role: role })
+  if (response.error) throw response.error
+}
+
+export async function removeRosterAccess(rosterId: string, userId: string) {
+  const response = await client().rpc('remove_roster_access', { p_roster_id: rosterId, p_user_id: userId })
+  if (response.error) throw response.error
+}
+
+export async function transferRosterOwnership(rosterId: string, userId: string) {
+  const response = await client().rpc('transfer_roster_ownership', { p_roster_id: rosterId, p_new_owner_id: userId })
+  if (response.error) throw response.error
 }
 
 export async function acceptRosterInvitation(token: string) {

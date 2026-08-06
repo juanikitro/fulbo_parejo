@@ -8,8 +8,8 @@ import { describeMatchProposal } from './domain/matchmakingExplanation'
 import { isGoalkeeper, operationalRating, partitionPlayers, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText } from './lib/matchShare'
-import { canManageRosterAccess, generateWhatsAppInvitation, runOnce, type RosterAccessEntry } from './lib/rosterAccess'
-import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, isRosterOwner, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, manageMatchHistory, recordMatch, renameRoster, saveActiveRosterId, setArchived, updatePlayer, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
+import { canEditRoster, canInviteRole, canManageRosterAccess, generateWhatsAppInvitation, runOnce, type RosterAccessEntry, type RosterRole } from './lib/rosterAccess'
+import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, loadRosterRole, manageMatchHistory, recordMatch, removeRosterAccess, renameRoster, saveActiveRosterId, setArchived, transferRosterOwnership, updatePlayer, updateRosterAccessRole, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 import { isAdmin } from './admin/api'
@@ -287,7 +287,7 @@ export default function App() {
   const [rosterSetupOpen, setRosterSetupOpen] = useState(false)
   const [rosterSwitchTarget, setRosterSwitchTarget] = useState<string | null>(null)
   const [rosterSaving, setRosterSaving] = useState(false)
-  const [isOwner, setIsOwner] = useState(false)
+  const [rosterRole, setRosterRole] = useState<RosterRole | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
   const [chemistry, setChemistry] = useState<PairChemistry>(new Map())
@@ -325,6 +325,7 @@ export default function App() {
   const [rosterAccessLoadError, setRosterAccessLoadError] = useState<string | null>(null)
   const [invitationError, setInvitationError] = useState<string | null>(null)
   const [invitationLoading, setInvitationLoading] = useState(false)
+  const [rosterAccessActionUserId, setRosterAccessActionUserId] = useState<string | null>(null)
   const [archiveCandidate, setArchiveCandidate] = useState<Player | null>(null)
   const [archiveNotice, setArchiveNotice] = useState<Player | null>(null)
   const [archivingPlayerId, setArchivingPlayerId] = useState<string | null>(null)
@@ -432,9 +433,9 @@ export default function App() {
     const load = async () => {
       setRosterLoading(true)
       try {
-        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, owner] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), isRosterOwner(rosterId, userId)])
+        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, role] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), loadRosterRole(rosterId, userId)])
         if (live) {
-          setIsOwner(owner); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
+          setRosterRole(role); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
         }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
@@ -449,7 +450,7 @@ export default function App() {
   const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setMatchmakingExplanationOpen(false) }
   const selectRoster = (nextRosterId: string) => {
     if (nextRosterId === rosterId) return
-    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); closePlayerDetail(); setRosterId(nextRosterId)
+    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); setRosterRole(null); closePlayerDetail(); setRosterId(nextRosterId)
     if (userId) void saveActiveRosterId(userId, nextRosterId).catch(() => setMessage('No pudimos recordar este plantel para tu próximo ingreso.'))
   }
   const hasUnsavedRosterWork = selected.size > 0 || Boolean(proposal || editorOpen || pendingResult || editingHistory)
@@ -489,7 +490,7 @@ export default function App() {
     }
     finally { setRosterSaving(false) }
   }
-  const makeTeams = () => { try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
+  const makeTeams = () => { if (!canEditRoster(rosterRole)) return; try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
     if (!proposal) return
     const teamOnePlayers = proposal.teamOne.players.map((player) => player.id === oneId ? proposal.teamTwo.players.find((entry) => entry.id === twoId)! : player)
@@ -522,18 +523,18 @@ export default function App() {
     setProposal({ ...proposal, teamOne, teamTwo, balanceGap: Math.abs(teamOne.operationalRating - teamTwo.operationalRating), positionAdjustmentChangedResult: false, chemistryChangedResult: false, unassignedPreservesBalance: false })
     setMessage(`🔄 ${player.name} cambió por ${counterpart.name}.`)
   }
-  const openPlayerEditor = (player?: Player) => {
+  const openPlayerEditor = (player?: Player) => { if (!canEditRoster(rosterRole)) return
     setEditingPlayer(player ?? null)
     setDraft(player ? { name: player.name, baseRating: String(player.baseRating), preferredPosition: player.preferredPosition ?? '', icon: player.icon, color: player.color } : blankDraft)
     setEditorOpen(true)
   }
-  const openResultEditor = (result: RecordedResult) => {
+  const openResultEditor = (result: RecordedResult) => { if (!canEditRoster(rosterRole)) return
     if (!proposal) return
     setPerformanceRatings(new Map([...proposal.teamOne.players, ...proposal.teamTwo.players].map((player) => [player.id, 0] as const)))
     setPendingResult(result)
   }
   const closeResultEditor = () => { setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
-  const openHistoryEditor = (entry: HistoryEntry) => {
+  const openHistoryEditor = (entry: HistoryEntry) => { if (!canEditRoster(rosterRole)) return
     setEditingHistory(entry)
     setHistoryResult(entry.outcome === 'team_one' ? 'teamOne' : entry.outcome === 'team_two' ? 'teamTwo' : 'draw')
     setGoalDifference(entry.goalDifference === null ? '' : String(entry.goalDifference))
@@ -566,7 +567,7 @@ export default function App() {
   }
   const closePlayerDetail = () => { detailRequest.current += 1; setDetailPlayer(null); setPlayerMatchHistory([]); setPlayerHistoryError(null) }
   const savePlayer = async (event: React.FormEvent) => {
-    event.preventDefault(); if (!rosterId || !draft.name.trim()) return
+    event.preventDefault(); if (!canEditRoster(rosterRole) || !rosterId || !draft.name.trim()) return
     const rating = parseInitialRating(draft.baseRating)
     if (rating === null) { setMessage(initialRatingValidationMessage); return }
     setSaving(true)
@@ -579,7 +580,7 @@ export default function App() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar el jugador.') } finally { setSaving(false) }
   }
   const archive = async () => {
-    if (!archiveCandidate) return
+    if (!canEditRoster(rosterRole) || !archiveCandidate) return
     const player = archiveCandidate
     const wasSelected = selected.has(player.id)
     setArchiveCandidate(null); setArchivingPlayerId(player.id)
@@ -596,7 +597,7 @@ export default function App() {
     } finally { setArchivingPlayerId(null) }
   }
   const restore = async (player: Player) => {
-    setArchivingPlayerId(player.id)
+    if (!canEditRoster(rosterRole)) return; setArchivingPlayerId(player.id)
     setPlayers((current) => current.map((entry) => entry.id === player.id ? { ...entry, archived: false } : entry))
     try {
       await setArchived(player.id, false)
@@ -609,7 +610,7 @@ export default function App() {
     } finally { setArchivingPlayerId(null) }
   }
   const record = async (result: RecordedResult) => {
-    if (!proposal || !rosterId) return
+    if (!canEditRoster(rosterRole) || !proposal || !rosterId) return
     setSaving(true)
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
@@ -620,7 +621,7 @@ export default function App() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
-    if (!editingHistory || !rosterId) return
+    if (!canEditRoster(rosterRole) || !editingHistory || !rosterId) return
     setSaving(true)
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
@@ -631,7 +632,7 @@ export default function App() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
-    if (!rosterId || !window.confirm('¿Borrar este partido? Se recalcularán las medias Elo.')) return
+    if (!canEditRoster(rosterRole) || !rosterId || !window.confirm('¿Borrar este partido? Se recalcularán las medias Elo.')) return
     setSaving(true)
     try {
       await manageMatchHistory(entry.id, 'delete')
@@ -653,7 +654,7 @@ export default function App() {
     window.requestAnimationFrame(() => inviteButtonRef.current?.focus())
   }
   const openRosterAccess = async () => {
-    if (!rosterId || !canManageRosterAccess(isOwner)) return
+    if (!rosterId || !canManageRosterAccess(rosterRole)) return
     const requestId = rosterAccessRequest.current + 1
     rosterAccessRequest.current = requestId
     setRosterAccessOpen(true); setRosterAccessEntries([]); setRosterAccessLoadError(null); setInvitationError(null); setRosterAccessLoading(true)
@@ -666,16 +667,51 @@ export default function App() {
       if (rosterAccessRequest.current === requestId) setRosterAccessLoading(false)
     }
   }
-  const invite = async () => {
-    if (!rosterId || !canManageRosterAccess(isOwner)) return
+  const invite = async (role: Exclude<RosterRole, 'owner'>) => {
+    if (!rosterId || !canInviteRole(rosterRole, role)) return
     await runOnce(invitationRequestInFlight, async () => {
       setInvitationLoading(true); setInvitationError(null)
       try {
-        await generateWhatsAppInvitation(() => createRosterInvitation(rosterId), window.location.origin, window.location.pathname, (url) => window.location.assign(url))
+        await generateWhatsAppInvitation(() => createRosterInvitation(rosterId, role), window.location.origin, window.location.pathname, (url) => window.location.assign(url))
       } catch (error) {
         setInvitationError(error instanceof Error ? error.message : 'No se pudo crear la invitación. Intentá de nuevo.')
       } finally { setInvitationLoading(false) }
     })
+  }
+  const refreshRosterAccess = async () => {
+    if (!rosterId) return
+    const entries = await loadRosterAccess(rosterId)
+    setRosterAccessEntries(entries)
+  }
+  const changeRosterAccessRole = async (entry: RosterAccessEntry, role: Exclude<RosterRole, 'owner'>) => {
+    if (!rosterId || rosterRole !== 'owner') return
+    setRosterAccessActionUserId(entry.userId); setInvitationError(null)
+    try {
+      await updateRosterAccessRole(rosterId, entry.userId, role)
+      await refreshRosterAccess()
+      setMessage(`${entry.displayName} ahora es ${role === 'technical' ? 'parte del cuerpo técnico' : 'jugador/a'}.`)
+    } catch (error) { setInvitationError(error instanceof Error ? error.message : 'No se pudo actualizar el rol.') }
+    finally { setRosterAccessActionUserId(null) }
+  }
+  const removeRosterAccessEntry = async (entry: RosterAccessEntry) => {
+    if (!rosterId || rosterRole !== 'owner' || !window.confirm(`¿Quitar el acceso de ${entry.displayName}?`)) return
+    setRosterAccessActionUserId(entry.userId); setInvitationError(null)
+    try {
+      await removeRosterAccess(rosterId, entry.userId)
+      await refreshRosterAccess()
+      setMessage(`Se quitó el acceso de ${entry.displayName}.`)
+    } catch (error) { setInvitationError(error instanceof Error ? error.message : 'No se pudo quitar el acceso.') }
+    finally { setRosterAccessActionUserId(null) }
+  }
+  const transferOwnership = async (entry: RosterAccessEntry) => {
+    if (!rosterId || rosterRole !== 'owner' || !window.confirm(`¿Transferir la propiedad del plantel a ${entry.displayName}? Vas a quedar como parte del cuerpo técnico.`)) return
+    setRosterAccessActionUserId(entry.userId); setInvitationError(null)
+    try {
+      await transferRosterOwnership(rosterId, entry.userId)
+      const [accessibleRosters] = await Promise.all([loadAccessibleRosters(), refreshRosterAccess()])
+      setRosters(accessibleRosters); setRosterRole('technical'); setMessage(`${entry.displayName} ahora es la persona propietaria del plantel.`)
+    } catch (error) { setInvitationError(error instanceof Error ? error.message : 'No se pudo transferir la propiedad.') }
+    finally { setRosterAccessActionUserId(null) }
   }
   const historyParticipants = editingHistory?.playerOffsets.map((participant) => players.find((player) => player.id === participant.playerId) ?? { id: participant.playerId, name: participant.playerName, icon: '⚽', color: '#879381' }) ?? []
 
@@ -686,16 +722,16 @@ export default function App() {
   return <main className="app-shell">
     <InstallPrompt authenticated={Boolean(userId)} afterMilestone={installReminderReady} open={installPromptOpen} onOpen={() => setInstallPromptOpen(true)} onClose={() => setInstallPromptOpen(false)} />
     {archiveNotice ? <NoticeToast message={`${archiveNotice.name} fue enviado a la papelera`} actionLabel={archivingPlayerId === archiveNotice.id ? 'Restaurando…' : 'Deshacer'} actionDisabled={archivingPlayerId === archiveNotice.id} onAction={() => void restore(archiveNotice)} onClose={() => setArchiveNotice(null)} /> : message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
-    <header className="topbar"><div><h1>Fulbo<em>Parejo</em></h1>{rosterId && <RosterSwitcher currentId={rosterId} rosters={rosters} userId={userId} saving={saving || rosterSaving} onSelect={requestRosterSelect} onCreate={saveRoster} onRename={saveRosterName} />}</div><div className="header-actions">{adminAvailable && <AdminDashboardButton onOpen={() => { window.location.hash = '#/admin' }} />}<InstallAppButton onOpen={() => setInstallPromptOpen(true)} /><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(isOwner) && <button ref={inviteButtonRef} className="header-icon-button invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving || rosterSaving} onClick={() => void openRosterAccess()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7.1l2-2a4 4 0 1 0-5.7-5.7l-1.1 1.1M14 10.5a4 4 0 0 0-5.7-.1l-2 2A4 4 0 1 0 12 18.1l1.1-1.1" /></svg></button>}<button className="header-icon-button logout-button" aria-label="Salir" title="Salir" disabled={saving || rosterSaving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
-    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
-    {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
+    <header className="topbar"><div><h1>Fulbo<em>Parejo</em></h1>{rosterId && <RosterSwitcher currentId={rosterId} rosters={rosters} userId={userId} saving={saving || rosterSaving} onSelect={requestRosterSelect} onCreate={saveRoster} onRename={saveRosterName} />}</div><div className="header-actions">{adminAvailable && <AdminDashboardButton onOpen={() => { window.location.hash = '#/admin' }} />}<InstallAppButton onOpen={() => setInstallPromptOpen(true)} /><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(rosterRole) && <button ref={inviteButtonRef} className="header-icon-button invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving || rosterSaving} onClick={() => void openRosterAccess()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7.1l2-2a4 4 0 1 0-5.7-5.7l-1.1 1.1M14 10.5a4 4 0 0 0-5.7-.1l-2 2A4 4 0 1 0 12 18.1l1.1-1.1" /></svg></button>}<button className="header-icon-button logout-button" aria-label="Salir" title="Salir" disabled={saving || rosterSaving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
+    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab editable={canEditRoster(rosterRole)} activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
+    {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : !canEditRoster(rosterRole) ? <section className="panel"><p className="eyebrow">SOLO LECTURA</p><h2>Nuevo partido</h2><p className="muted">El cuerpo técnico arma los equipos y registra los resultados de este plantel.</p></section> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes vinieron?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
       {proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <button type="button" className="balance-gap-trigger" aria-label={`Ver por qué quedaron parejos: diferencia de ${fmt(proposal.balanceGap)} de media`} aria-haspopup="dialog" onClick={() => setMatchmakingExplanationOpen(true)}>Δ {fmt(proposal.balanceGap)}</button></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section><section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section><section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section></>}</section>)}
-    {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab history={history} saving={saving} hasMore={historyHasMore} loadingMore={historyLoadingMore} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} onLoadMore={loadMoreHistory} /></Suspense>}
+    {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab editable={canEditRoster(rosterRole)} history={history} saving={saving} hasMore={historyHasMore} loadingMore={historyLoadingMore} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} onLoadMore={loadMoreHistory} /></Suspense>}
     {editorOpen && <PlayerEditor draft={draft} editingPlayer={editingPlayer} saving={saving} onClose={() => setEditorOpen(false)} onSubmit={(event) => void savePlayer(event)} onChange={setDraft} />}
     {pendingResult && proposal && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} participants={[...proposal.teamOne.players, ...proposal.teamTwo.players]} performanceRatings={performanceRatings} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onSave={() => void record(pendingResult)} />}
     {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} players={players} history={playerMatchHistory} chemistryPairs={chemistryPairs} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
-    {rosterAccessOpen && canManageRosterAccess(isOwner) && <RosterAccessDialog entries={rosterAccessEntries} loading={rosterAccessLoading} loadError={rosterAccessLoadError} inviteError={invitationError} inviting={invitationLoading} onClose={closeRosterAccess} onInvite={() => void invite()} />}
+    {rosterAccessOpen && (rosterRole === 'owner' || rosterRole === 'technical') && <RosterAccessDialog actorRole={rosterRole} entries={rosterAccessEntries} loading={rosterAccessLoading} loadError={rosterAccessLoadError} inviteError={invitationError} inviting={invitationLoading} actionUserId={rosterAccessActionUserId} onClose={closeRosterAccess} onInvite={(role) => void invite(role)} onChangeRole={(entry, role) => void changeRosterAccessRole(entry, role)} onRemove={(entry) => void removeRosterAccessEntry(entry)} onTransfer={(entry) => void transferOwnership(entry)} />}
     {rosterSetupOpen && <RosterNameDialog title="Tu primer plantel" saving={rosterSaving} onSave={saveRoster} />}
     {rosterSwitchTarget && <RosterSwitchConfirm onCancel={() => setRosterSwitchTarget(null)} onConfirm={() => { selectRoster(rosterSwitchTarget); setRosterSwitchTarget(null) }} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}

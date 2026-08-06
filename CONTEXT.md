@@ -17,12 +17,24 @@ Espacio independiente de Jugadores, Partidos, Historial y valoraciones. Tiene un
 _Avoid_: Lista de asistentes, equipo
 
 **Privacidad del Plantel**:
-Regla por la que sólo la Cuenta dueña y sus Cuentas colaboradoras pueden leer o modificar sus datos. Sólo la dueña cambia el nombre o administra invitaciones.
+Regla por la que sólo la Cuenta dueña y sus Cuentas con acceso pueden leer sus datos. La Cuenta dueña y el Cuerpo técnico pueden modificar Jugadores y Partidos; sólo la dueña administra accesos y el nombre.
 _Avoid_: Acceso público
 
-**Colaborador**:
-Cuenta invitada a un Plantel. Puede gestionar Jugadores y Partidos, pero no renombrar ni administrar accesos.
+**Acceso al Plantel**:
+Rol que una Cuenta tiene dentro de un Plantel compartido. Puede ser Propietario, Cuerpo técnico o Jugador.
+_Avoid_: Permiso global, perfil de cuenta
+
+**Propietario**:
+Cuenta que crea el Plantel. Puede administrar todos sus datos, invitar Cuerpo técnico y Jugadores, cambiar roles, revocar accesos y transferir la propiedad a una Cuenta del Cuerpo técnico.
+_Avoid_: Administrador global, dueño de la cuenta
+
+**Cuerpo técnico**:
+Cuenta con acceso operativo completo a un Plantel: crea y edita Jugadores y Partidos e invita Jugadores. No puede renombrar el Plantel ni administrar roles o propiedad.
 _Avoid_: Propietario secundario, lector
+
+**Jugador (acceso)**:
+Cuenta invitada a un Plantel compartido que sólo puede consultar su Plantel, sus Jugadores y el Historial.
+_Avoid_: Participante editable, colaborador
 
 **Autenticación Google**:
 Mecanismo por el que una Cuenta se identifica mediante su identidad de Google, sin credenciales locales propias de la aplicación.

@@ -1,22 +1,28 @@
 import { useEffect, useRef } from 'react'
-import type { RosterAccessEntry } from '../lib/rosterAccess'
+import type { RosterAccessEntry, RosterRole } from '../lib/rosterAccess'
 
 type RosterAccessDialogProps = {
+  actorRole: Extract<RosterRole, 'owner' | 'technical'>
   entries: RosterAccessEntry[]
   loading: boolean
   loadError: string | null
   inviteError: string | null
   inviting: boolean
+  actionUserId: string | null
   onClose: () => void
-  onInvite: () => void
+  onInvite: (role: Exclude<RosterRole, 'owner'>) => void
+  onChangeRole: (entry: RosterAccessEntry, role: Exclude<RosterRole, 'owner'>) => void
+  onRemove: (entry: RosterAccessEntry) => void
+  onTransfer: (entry: RosterAccessEntry) => void
 }
 
-export default function RosterAccessDialog({ entries, loading, loadError, inviteError, inviting, onClose, onInvite }: RosterAccessDialogProps) {
+export default function RosterAccessDialog({ actorRole, entries, loading, loadError, inviteError, inviting, actionUserId, onClose, onInvite, onChangeRole, onRemove, onTransfer }: RosterAccessDialogProps) {
   const dialogRef = useRef<HTMLElement | null>(null)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const onCloseRef = useRef(onClose)
   const owner = entries.find((entry) => entry.role === 'owner')
-  const members = entries.filter((entry) => entry.role === 'member')
+  const members = entries.filter((entry) => entry.role !== 'owner')
+  const busy = loading || inviting || Boolean(actionUserId)
   onCloseRef.current = onClose
 
   useEffect(() => {
@@ -39,11 +45,11 @@ export default function RosterAccessDialog({ entries, loading, loadError, invite
   }
 
   return <div className="modal-backdrop" onMouseDown={onClose}>
-    <section className="result-modal roster-access-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="roster-access-title" aria-busy={loading || inviting} onMouseDown={(event) => event.stopPropagation()} onKeyDown={keepFocusInDialog}>
-      <div className="form-heading"><div><p className="eyebrow">ACCESO AL PLANTEL</p><h2 id="roster-access-title">Acceso al plantel</h2></div><button ref={closeButtonRef} type="button" aria-label="Cerrar acceso al plantel" disabled={inviting} onClick={onClose}>×</button></div>
-      {loading ? <p className="muted" role="status">Cargando personas con acceso…</p> : loadError ? <p className="detail-error" role="alert">{loadError}</p> : <div className="roster-access-content"><section><h3>Propietario</h3>{owner ? <p className="roster-access-person"><strong>{owner.displayName}</strong><small>Propietario</small></p> : <p className="muted">No se pudo identificar a la persona propietaria.</p>}</section><section><h3>Miembros</h3>{members.length ? <ul className="roster-access-list">{members.map((member, index) => <li className="roster-access-person" key={`${member.displayName}-${index}`}><strong>{member.displayName}</strong><small>Miembro</small></li>)}</ul> : <p className="muted">Todavía no hay miembros con acceso al plantel.</p>}</section></div>}
+    <section className="result-modal roster-access-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="roster-access-title" aria-busy={busy} onMouseDown={(event) => event.stopPropagation()} onKeyDown={keepFocusInDialog}>
+      <div className="form-heading"><div><p className="eyebrow">ACCESO AL PLANTEL</p><h2 id="roster-access-title">Acceso al plantel</h2></div><button ref={closeButtonRef} type="button" aria-label="Cerrar acceso al plantel" disabled={busy} onClick={onClose}>×</button></div>
+      {loading ? <p className="muted" role="status">Cargando personas con acceso…</p> : loadError ? <p className="detail-error" role="alert">{loadError}</p> : <div className="roster-access-content"><section><h3>Propietario</h3>{owner ? <p className="roster-access-person"><strong>{owner.displayName}</strong><small>Propietario</small></p> : <p className="muted">No se pudo identificar a la persona propietaria.</p>}</section><section><h3>Accesos</h3>{members.length ? <ul className="roster-access-list">{members.map((member) => <li className="roster-access-person" key={member.userId}><div><strong>{member.displayName}</strong><small>{member.role === 'technical' ? 'Cuerpo técnico' : 'Jugador'}</small></div>{actorRole === 'owner' && <div className="roster-access-actions"><button type="button" disabled={busy} onClick={() => onChangeRole(member, member.role === 'technical' ? 'player' : 'technical')}>{member.role === 'technical' ? 'Hacer jugador' : 'Hacer técnico'}</button>{member.role === 'technical' && <button type="button" disabled={busy} onClick={() => onTransfer(member)}>Transferir</button>}<button type="button" disabled={busy} onClick={() => onRemove(member)}>Quitar</button></div>}</li>)}</ul> : <p className="muted">Todavía no hay personas con acceso al plantel.</p>}</section></div>}
       {inviteError && <p className="detail-error" role="alert">{inviteError}</p>}
-      <button type="button" className="save-player roster-invite-button" disabled={loading || inviting} onClick={onInvite}>{inviting ? 'Generando invitación…' : 'Invitar por WhatsApp'}</button>
+      <div className="roster-invite-actions"><button type="button" className="save-player roster-invite-button" disabled={busy} onClick={() => onInvite('player')}>{inviting ? 'Generando invitación…' : 'Invitar jugador por WhatsApp'}</button>{actorRole === 'owner' && <button type="button" className="roster-invite-button" disabled={busy} onClick={() => onInvite('technical')}>Invitar cuerpo técnico</button>}</div>
     </section>
   </div>
 }
