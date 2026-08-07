@@ -17,7 +17,7 @@ export function buildRosterInvitationUrl(origin: string, pathname: string, token
 }
 
 export function buildWhatsAppInvitationText(invitationUrl: string) {
-  return `Te invito a sumarte al plantel de Fulbo Parejo. Abrí este link, iniciá sesión con Google y vas a tener acceso: ${invitationUrl}`
+  return `Te invito a sumarte al plantel de Fulbo Parejo. El link es válido durante 3 días y puede usarlo más de una persona. Abrí este link, iniciá sesión con Google y vas a tener acceso: ${invitationUrl}`
 }
 
 export function buildWhatsAppInvitationUrl(invitationUrl: string) {
