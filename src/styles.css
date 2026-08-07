@@ -155,9 +155,10 @@ html[data-theme='dark'] .cafecito-support a { border-color: #a6ca8f; background:
 html[data-theme='dark'] .cafecito-support a:hover { background: #edf8d8; box-shadow: 0 4px 0 #08100a; }
 /* El acceso de feedback conserva el peso visual del cafecito, con el verde propio de WhatsApp. */
 .cafecito-support { flex-wrap: wrap; gap: 9px; }
+.cafecito-support a { gap: 5px; min-height: 38px; padding: 8px 10px; font-size: 11px; }
 .cafecito-support .whatsapp-feedback { border-color: #176b3a; background: #1f9d55; box-shadow-color: #0b4d29; }
 .cafecito-support .whatsapp-feedback:hover { background: #27ae60; box-shadow-color: #0b4d29; }
-.whatsapp-feedback svg { width: 18px; height: 18px; fill: currentColor; }
+.whatsapp-feedback svg { width: 15px; height: 15px; fill: currentColor; }
 html[data-theme='dark'] .cafecito-support .whatsapp-feedback { border-color: #69c88d; background: #1f9d55; color: #f5fff8; box-shadow-color: #0b4d29; }
 html[data-theme='dark'] .cafecito-support .whatsapp-feedback:hover { background: #27ae60; box-shadow-color: #0b4d29; }
 html[data-theme='dark'] .mayofy-credit { border-color: #3c5142; color: #b8c8ba; }
