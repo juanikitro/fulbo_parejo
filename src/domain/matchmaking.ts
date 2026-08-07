@@ -4,32 +4,37 @@ import { pairChemistry, type PairChemistry } from './chemistry'
 const GOALKEEPER_COMPENSATION = 0.4
 const LINE_POSITION_PENALTY = 0.16
 const EXACT_POSITION_PENALTY = 0.08
+const SECONDARY_POSITION_WEIGHT = 0.5
 const CHEMISTRY_WEIGHT = 0.08
 
 const total = (players: Player[]) => players.reduce((sum, player) => sum + operationalRating(player), 0)
+const coversGoalkeeper = (player: Player) => isGoalkeeper(player.preferredPosition) || isGoalkeeper(player.secondaryPosition)
+const goalkeeperPriority = (player: Player) => isGoalkeeper(player.preferredPosition) ? 2 : isGoalkeeper(player.secondaryPosition) ? 1 : 0
+const positionCoverage = (player: Player, position: typeof positions[number]) => player.preferredPosition === position ? 1 : player.secondaryPosition === position ? SECONDARY_POSITION_WEIGHT : 0
+const lineCoverage = (player: Player, line: 'defence' | 'midfield' | 'attack') => player.preferredPosition && positionLine[player.preferredPosition] === line ? 1 : player.secondaryPosition && positionLine[player.secondaryPosition] === line ? SECONDARY_POSITION_WEIGHT : 0
 
 const positionPenalty = (one: Player[], two: Player[]) => {
   const linePenalty = ['defence', 'midfield', 'attack'] as const
   const byLine = linePenalty.reduce((penalty, line) => {
-    const oneCount = one.filter((player) => player.preferredPosition && positionLine[player.preferredPosition] === line).length
-    const twoCount = two.filter((player) => player.preferredPosition && positionLine[player.preferredPosition] === line).length
+    const oneCount = one.reduce((count, player) => count + lineCoverage(player, line), 0)
+    const twoCount = two.reduce((count, player) => count + lineCoverage(player, line), 0)
     return penalty + Math.abs(oneCount - twoCount) * LINE_POSITION_PENALTY
   }, 0)
   const byPosition = positions.filter((position) => !isGoalkeeper(position)).reduce((penalty, position) => {
-    const oneCount = one.filter((player) => player.preferredPosition === position).length
-    const twoCount = two.filter((player) => player.preferredPosition === position).length
+    const oneCount = one.reduce((count, player) => count + positionCoverage(player, position), 0)
+    const twoCount = two.reduce((count, player) => count + positionCoverage(player, position), 0)
     return penalty + Math.abs(oneCount - twoCount) * EXACT_POSITION_PENALTY
   }, 0)
   return byLine + byPosition
 }
 
 const adjustedStrength = (players: Player[]) =>
-  total(players) - (players.some((player) => isGoalkeeper(player.preferredPosition)) ? 0 : GOALKEEPER_COMPENSATION)
+  total(players) - (players.some(coversGoalkeeper) ? 0 : GOALKEEPER_COMPENSATION)
 
 const teamChemistry = (players: Player[], chemistry: PairChemistry) => players.reduce((score, player, index) => score + players.slice(index + 1).reduce((pairScore, teammate) => pairScore + pairChemistry(chemistry, player.id, teammate.id), 0), 0)
 
 const score = (one: Player[], two: Player[], requireGoalkeeperEach: boolean, chemistry: PairChemistry, includePositionPenalty: boolean) => {
-  const missingGoalkeeper = [one, two].filter((team) => !team.some((player) => isGoalkeeper(player.preferredPosition))).length
+  const missingGoalkeeper = [one, two].filter((team) => !team.some(coversGoalkeeper)).length
   const goalkeeperPenalty = requireGoalkeeperEach ? missingGoalkeeper * 100 : 0
   return Math.abs(adjustedStrength(one) - adjustedStrength(two)) + (includePositionPenalty ? positionPenalty(one, two) : 0) + goalkeeperPenalty - (teamChemistry(one, chemistry) + teamChemistry(two, chemistry)) * CHEMISTRY_WEIGHT
 }
@@ -39,13 +44,12 @@ const splitEven = (players: Player[], chemistry: PairChemistry, includePositionP
   const remaining = [...players].sort((a, b) => operationalRating(b) - operationalRating(a))
   const one: Player[] = []
   const two: Player[] = []
-  const goalkeepers = remaining.filter((player) => isGoalkeeper(player.preferredPosition))
+  const goalkeepers = remaining.filter(coversGoalkeeper).sort((one, two) => goalkeeperPriority(two) - goalkeeperPriority(one) || operationalRating(two) - operationalRating(one))
   const requireGoalkeeperEach = goalkeepers.length >= 2
 
   if (goalkeepers.length >= 2) {
     one.push(goalkeepers[0])
     two.push(goalkeepers[1])
-    for (const goalkeeper of goalkeepers.slice(2)) remaining.splice(remaining.indexOf(goalkeeper), 1)
     remaining.splice(remaining.indexOf(goalkeepers[0]), 1)
     remaining.splice(remaining.indexOf(goalkeepers[1]), 1)
   } else if (goalkeepers.length === 1) {
@@ -104,7 +108,7 @@ function buildProposal(players: Player[], chemistry: PairChemistry, includePosit
 
   for (const candidate of candidates) {
     const split = splitEven(candidate.selected, chemistry, includePositionPenalty)
-    const candidateScore = score(split.one, split.two, candidate.selected.filter((player) => isGoalkeeper(player.preferredPosition)).length >= 2, chemistry, includePositionPenalty)
+    const candidateScore = score(split.one, split.two, candidate.selected.filter(coversGoalkeeper).length >= 2, chemistry, includePositionPenalty)
     const balanceGap = Math.abs(total(split.one) - total(split.two))
     candidateBalanceGaps.push(balanceGap)
     if (!best || candidateScore < best.score) best = { ...split, unassigned: candidate.unassigned, score: candidateScore, balanceGap }
@@ -139,8 +143,9 @@ export function findComparableSwap(player: Player, teammates: Player[], opponent
       const gapDifference = balanceGap(one) - balanceGap(two)
       if (Math.abs(gapDifference) > 0.000001) return gapDifference
 
-      const samePositionDifference = Number(two.preferredPosition === player.preferredPosition) - Number(one.preferredPosition === player.preferredPosition)
-      if (samePositionDifference) return samePositionDifference
+      const positionCompatibility = (candidate: Player) => candidate.preferredPosition === player.preferredPosition ? 4 : candidate.secondaryPosition === player.preferredPosition || candidate.preferredPosition === player.secondaryPosition ? 2 : candidate.secondaryPosition === player.secondaryPosition ? 1 : 0
+      const compatibilityDifference = positionCompatibility(two) - positionCompatibility(one)
+      if (compatibilityDifference) return compatibilityDifference
 
       return Math.abs(operationalRating(one) - playerRating) - Math.abs(operationalRating(two) - playerRating)
     })[0]

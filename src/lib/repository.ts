@@ -11,6 +11,7 @@ type PlayerRow = {
   learned_rating: number | string
   elo_seed: number | string
   preferred_position: Position | null
+  secondary_position: Position | null
   icon: string
   color: string
   archived_at: string | null
@@ -51,6 +52,7 @@ const fromRow = (row: PlayerRow): Player => ({
   learnedRating: Number(row.learned_rating),
   eloSeed: Number(row.elo_seed),
   preferredPosition: row.preferred_position ?? undefined,
+  secondaryPosition: row.secondary_position ?? undefined,
   icon: row.icon,
   color: row.color,
   archived: Boolean(row.archived_at),
@@ -148,7 +150,7 @@ export async function acceptRosterInvitation(token: string) {
 }
 
 export async function loadPlayers(rosterId: string) {
-  const response = await client().from('players').select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').eq('roster_id', rosterId).order('archived_at', { ascending: true, nullsFirst: true }).order('name')
+  const response = await client().from('players').select('id,name,base_rating,learned_rating,elo_seed,preferred_position,secondary_position,icon,color,archived_at').eq('roster_id', rosterId).order('archived_at', { ascending: true, nullsFirst: true }).order('name')
   if (response.error) throw response.error
   return (response.data as PlayerRow[]).map(fromRow)
 }
@@ -161,9 +163,10 @@ export async function createPlayer(rosterId: string, player: Omit<Player, 'id' |
     learned_rating: player.learnedRating,
     elo_seed: player.eloSeed,
     preferred_position: player.preferredPosition ?? null,
+    secondary_position: player.secondaryPosition ?? null,
     icon: player.icon,
     color: player.color,
-  }).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').single()
+  }).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,secondary_position,icon,color,archived_at').single()
   if (response.error) throw response.error
   return fromRow(response.data as PlayerRow)
 }
@@ -175,9 +178,10 @@ export async function updatePlayer(playerId: string, player: Omit<Player, 'id' |
     learned_rating: player.learnedRating,
     elo_seed: player.eloSeed,
     preferred_position: player.preferredPosition ?? null,
+    secondary_position: player.secondaryPosition ?? null,
     icon: player.icon,
     color: player.color,
-  }).eq('id', playerId).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,icon,color,archived_at').single()
+  }).eq('id', playerId).select('id,name,base_rating,learned_rating,elo_seed,preferred_position,secondary_position,icon,color,archived_at').single()
   if (response.error) throw response.error
   return fromRow(response.data as PlayerRow)
 }

@@ -21,8 +21,9 @@ const lineSummary = (proposal: MatchProposal) => (Object.entries(lineLabels) as 
   })
 
 const goalkeeperMessage = (proposal: MatchProposal) => {
-  const one = proposal.teamOne.players.filter((player) => isGoalkeeper(player.preferredPosition)).length
-  const two = proposal.teamTwo.players.filter((player) => isGoalkeeper(player.preferredPosition)).length
+  const coversGoalkeeper = (player: MatchProposal['teamOne']['players'][number]) => isGoalkeeper(player.preferredPosition) || isGoalkeeper(player.secondaryPosition)
+  const one = proposal.teamOne.players.filter(coversGoalkeeper).length
+  const two = proposal.teamTwo.players.filter(coversGoalkeeper).length
   if (one === 1 && two === 1) return 'un arquero por lado'
   if (one + two === 1) return 'hay un solo arquero'
   if (one + two === 0) return 'sin arqueros convocados'
@@ -31,6 +32,7 @@ const goalkeeperMessage = (proposal: MatchProposal) => {
 
 export function describeMatchProposal(proposal: MatchProposal): MatchmakingExplanation {
   const lines = lineSummary(proposal)
+  const hasSecondaryPosition = [...proposal.teamOne.players, ...proposal.teamTwo.players].some((player) => player.secondaryPosition)
   const summary = [`Δ ${fmt(proposal.balanceGap)} de media`, goalkeeperMessage(proposal)]
   const criteria = [
     `Las medias operativas terminaron con una diferencia de ${fmt(proposal.balanceGap)}.`,
@@ -39,7 +41,7 @@ export function describeMatchProposal(proposal: MatchProposal): MatchmakingExpla
 
   if (lines.length) {
     summary.push(proposal.positionAdjustmentChangedResult ? 'posiciones contempladas como ajuste suave' : `líneas ${lines.join(' · ')}`)
-    criteria.push(`Líneas registradas: ${lines.join(' · ')}.${proposal.positionAdjustmentChangedResult ? ' Cambiaron esta propuesta como ajuste suave.' : ''}`)
+    criteria.push(`Líneas primarias registradas: ${lines.join(' · ')}.${hasSecondaryPosition ? ' Las posiciones secundarias aportaron cobertura con menor prioridad.' : ''}${proposal.positionAdjustmentChangedResult ? ' Cambiaron esta propuesta como ajuste suave.' : ''}`)
   }
   if (proposal.chemistryChangedResult) {
     summary.push('química considerada')
