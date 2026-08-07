@@ -46,9 +46,22 @@ h2 { font-size: 19px; letter-spacing: -.7px; } .eyebrow { color: #65715f; font: 
 
 .player-detail-trigger { display: flex; align-items: center; flex: 1; min-width: 0; gap: 10px; border: 0; padding: 0; background: transparent; color: #172018; text-align: left; font: inherit; }.player-detail-trigger > span:last-child { display: grid; min-width: 0; gap: 2px; }.player-detail-trigger strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.player-detail-trigger:hover strong, .team-player-detail:hover { text-decoration: underline; }.player-detail-trigger:focus-visible, .team-player-detail:focus-visible, .team-player-swap:focus-visible { outline: 3px solid #f2b13f; outline-offset: 3px; border-radius: 7px; }.team-card .team-player { display: flex; width: 100%; align-items: center; gap: 5px; padding: 8px 0 0; }.team-player-detail { display: flex; min-width: 0; align-items: center; gap: 7px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; }.team-player-detail i { flex: 0 0 23px; width: 23px; height: 23px; display: inline-grid; place-items: center; border-radius: 50%; font-style: normal; }.team-player-swap { display: flex; align-items: center; gap: 5px; margin-left: auto; border: 0; padding: 2px; background: transparent; color: inherit; font: 800 15px/1 'DM Mono', monospace; }.team-player-swap .team-player-details { margin-left: 0; }.player-detail-modal { max-height: min(92dvh, 700px); overflow-y: auto; }.player-detail-summary { display: flex; align-items: center; gap: 12px; padding: 11px; border-radius: 12px; background: #f5f1e2; }.player-detail-summary > span { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 50%; font-size: 20px; }.player-detail-summary > div { display: grid; gap: 2px; }.player-detail-summary > div:last-child { margin-left: auto; text-align: right; }.player-detail-summary strong { font: 800 16px 'DM Mono', monospace; }.player-detail-summary small { color: #65715f; font-size: 10px; }.player-detail-history { display: grid; gap: 10px; }.player-detail-history h3 { margin: 0; font-size: 14px; }.player-detail-history ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }.player-detail-history li { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 10px; border: 1px solid #e0dccb; border-radius: 10px; background: #fffdf5; }.player-detail-history li > div:first-child { display: grid; gap: 3px; min-width: 0; }.player-detail-history li strong { font-size: 12px; }.player-detail-history li > div:first-child small { color: #737b73; font-size: 10px; }.player-match-metrics { display: grid; justify-items: end; gap: 4px; }.performance-badge { padding: 3px 6px; border-radius: 99px; color: #172018; font: 800 10px 'DM Mono', monospace; white-space: nowrap; }.detail-error { padding: 10px; border-radius: 10px; background: #ffebe4; color: #aa4a35; font-size: 12px; }
 
-@media (max-width: 460px) {
+@media (max-width: 520px) {
   .team-player-detail { display: block; flex: 1 1 0; overflow: visible; overflow-wrap: anywhere; line-height: 1.3; }
-  .team-player-detail i, .team-player-swap { display: none; }
+  .team-player-detail i { display: none; }
+}
+
+@media (max-width: 480px) {
+  .team-player-swap { gap: 0; padding: 0; pointer-events: none; font-size: 0; }
+  .team-player-swap .team-player-details { gap: 5px; }
+}
+
+@media (max-width: 420px) {
+  .team-player-swap .rating-offset { display: none; }
+}
+
+@media (max-width: 340px) {
+  .team-player-swap .team-player-details > small { display: none; }
 }
 
 .player-card > div:not(.player-actions) { display: grid; gap: 2px; }
