@@ -24,6 +24,7 @@ export type Player = {
   learnedRating: number
   eloSeed: number
   preferredPosition?: Position
+  secondaryPosition?: Position
   icon: string
   color: string
   archived?: boolean

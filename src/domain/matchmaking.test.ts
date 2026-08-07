@@ -3,13 +3,14 @@ import { chemistryFromHistory } from './chemistry'
 import { createMatchProposal, findComparableSwap } from './matchmaking'
 import type { Player } from './types'
 
-const makePlayer = (id: string, rating: number, position?: Player['preferredPosition']): Player => ({
+const makePlayer = (id: string, rating: number, position?: Player['preferredPosition'], secondaryPosition?: Player['secondaryPosition']): Player => ({
   id,
   name: id,
   baseRating: rating,
   learnedRating: rating,
   eloSeed: rating,
   preferredPosition: position,
+  secondaryPosition,
   icon: '⚽',
   color: '#000',
 })
@@ -74,6 +75,27 @@ describe('createMatchProposal', () => {
     ])
 
     expect(candidate?.id).toBe('midfielder-8')
+  })
+
+  it('uses a secondary goalkeeper only when a primary goalkeeper is unavailable', () => {
+    const proposal = createMatchProposal([
+      makePlayer('primary-goalkeeper', 7, 'PO'),
+      makePlayer('secondary-goalkeeper', 7, 'DFC', 'PO'),
+      makePlayer('a', 7), makePlayer('b', 7), makePlayer('c', 7), makePlayer('d', 7),
+    ])
+
+    expect(proposal.teamOne.players.some((player) => player.id === 'primary-goalkeeper')).toBe(true)
+    expect(proposal.teamTwo.players.some((player) => player.id === 'secondary-goalkeeper')).toBe(true)
+  })
+
+  it('prefers a primary position match over a secondary one for comparable swaps', () => {
+    const selected = makePlayer('centre-back', 7, 'DFC', 'MC')
+    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate', 7)], [
+      makePlayer('secondary-match', 7, 'MC', 'DFC'),
+      makePlayer('primary-match', 7, 'DFC'),
+    ])
+
+    expect(candidate?.id).toBe('primary-match')
   })
 
   it('keeps positive pairs together and separates negative pairs when ratings are equal', () => {
