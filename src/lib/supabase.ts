@@ -5,9 +5,9 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 export const supabase = url && key ? createClient(url, key) : null
 
-export function authRedirectUrl(configuredUrl: string | undefined, currentOrigin = window.location.origin) {
-  const redirectTo = configuredUrl?.trim() || currentOrigin
-  const invite = new URL(currentOrigin).searchParams.get('invite')
+export function authRedirectUrl(configuredUrl: string | undefined, currentUrl = window.location.href) {
+  const redirectTo = configuredUrl?.trim() || currentUrl
+  const invite = new URL(currentUrl).searchParams.get('invite')
   if (!invite) return redirectTo
   const redirectUrl = new URL(redirectTo)
   redirectUrl.searchParams.set('invite', invite)

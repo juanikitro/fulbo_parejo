@@ -523,7 +523,7 @@ export default function App() {
     const destination = source === 'teamOne' ? proposal.teamTwo : proposal.teamOne
     const player = origin.players.find((entry) => entry.id === playerId)
     if (!player) return
-    const counterpart = findComparableSwap(player, destination.players)
+    const counterpart = findComparableSwap(player, origin.players, destination.players)
     if (!counterpart) { setMessage(`No hay un cambio compatible para ${player.name}.`); return }
     const nextOrigin = origin.players.map((entry) => entry.id === player.id ? counterpart : entry)
     const nextDestination = destination.players.map((entry) => entry.id === counterpart.id ? player : entry)
