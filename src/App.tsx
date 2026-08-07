@@ -747,7 +747,13 @@ export default function App() {
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
     {matchmakingExplanationOpen && proposal && <MatchmakingExplanationDialog proposal={proposal} onClose={() => setMatchmakingExplanationOpen(false)} />}
     {archiveCandidate && <ArchivePlayerDialog player={archiveCandidate} saving={archivingPlayerId === archiveCandidate.id} onClose={() => setArchiveCandidate(null)} onConfirm={() => void archive()} />}
-    <footer className="cafecito-support"><a href="https://cafecito.app/juanikitro" rel="noopener noreferrer" target="_blank">☕ <span>Doname un cafecito</span><span aria-hidden="true">↗</span></a></footer>
+    <footer className="cafecito-support">
+      <a href="https://cafecito.app/juanikitro" rel="noopener noreferrer" target="_blank">☕ <span>Doname un cafecito</span><span aria-hidden="true">↗</span></a>
+      <a className="whatsapp-feedback" href="https://wa.me/5492345455007?text=Hola%2C%20tengo%20una%20sugerencia%20o%20encontr%C3%A9%20un%20bug%20en%20Fulbo%20Parejo%3A" rel="noopener noreferrer" target="_blank">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3a13 13 0 0 0-8.1 23.2L6.5 30l3.9-1.3A13 13 0 1 0 16 3Zm0 23.6c-1.8 0-3.5-.5-5-1.4l-.4-.2-2.3.8.8-2.2-.3-.4A10.6 10.6 0 1 1 16 26.6Zm5.8-7.9c-.3-.2-1.8-.9-2.1-1s-.5-.2-.7.2-.8 1-.9 1.2-.3.3-.6.1a8.5 8.5 0 0 1-2.5-1.5 9.3 9.3 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.6c.2-.2.2-.4.3-.6s0-.5-.1-.6l-.9-2c-.2-.5-.5-.4-.7-.4h-.6c-.2 0-.6.1-.9.5s-1.2 1.2-1.2 2.9 1.2 3.3 1.3 3.5c.2.2 2.3 3.5 5.5 4.9.8.3 1.4.5 1.9.6.8.2 1.5.2 2.1.1.6-.1 1.8-.7 2.1-1.4s.3-1.2.2-1.4-.3-.2-.6-.4Z" /></svg>
+        <span>Mandanos tu idea</span><span aria-hidden="true">↗</span>
+      </a>
+    </footer>
     <nav className="bottom-nav">{([['squad', '👥', 'Plantel'], ['match', '⚽', 'Nuevo partido'], ['history', '📋', 'Historial']] as const).map(([key, icon, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}><span>{icon}</span>{label}</button>)}</nav>
   </main>
 }
