@@ -8,6 +8,7 @@ import { describeMatchProposal } from './domain/matchmakingExplanation'
 import { isGoalkeeper, operationalRating, partitionPlayers, positions, type MatchProposal, type Player, type Position, type Team } from './domain/types'
 import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText, formatShareMovement } from './lib/matchShare'
+import { retry } from './lib/retry'
 import { canEditRoster, canInviteRole, canManageRosterAccess, canPlanMatch, generateWhatsAppInvitation, runOnce, type RosterAccessEntry, type RosterRole } from './lib/rosterAccess'
 import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, loadRosterRole, manageMatchHistory, recordMatch, removeRosterAccess, renameRoster, saveActiveRosterId, setArchived, transferRosterOwnership, updatePlayer, updateRosterAccessRole, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
@@ -28,6 +29,8 @@ type Tab = 'squad' | 'match' | 'history'
 type ThemePreference = 'system' | 'light' | 'dark'
 
 const themeStorageKey = 'fulbo-parejo-theme-preference'
+const rosterLoadRetries = 5
+const rosterLoadDelayMs = 1000
 const fmt = (value: number) => value.toFixed(2)
 const blankDraft = { name: '', baseRating: '60', preferredPosition: '', secondaryPosition: '', icon: playerIcons[0], color: playerColors[0] }
 // U+FE0E prevents Safari on iPhone from rendering diagonal arrows as colored emoji.
@@ -421,7 +424,7 @@ export default function App() {
       try {
         const token = new URLSearchParams(window.location.search).get('invite')
         const id = token ? await acceptRosterInvitation(token) : null
-        const [accessibleRosters, preferredId] = await Promise.all([loadAccessibleRosters(), id ? Promise.resolve(id) : loadActiveRosterId(userId)])
+        const [accessibleRosters, preferredId] = await retry(() => Promise.all([loadAccessibleRosters(), id ? Promise.resolve(id) : loadActiveRosterId(userId)]), { retries: rosterLoadRetries, delayMs: rosterLoadDelayMs })
         if (token) window.history.replaceState({}, '', window.location.pathname)
         const activeId = accessibleRosters.some((roster) => roster.id === preferredId) ? preferredId! : accessibleRosters[0]?.id ?? null
         if (live) {
@@ -444,7 +447,7 @@ export default function App() {
     const load = async () => {
       setRosterLoading(true)
       try {
-        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, role] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), loadRosterRole(rosterId, userId)])
+        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, role] = await retry(() => Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), loadRosterRole(rosterId, userId)]), { retries: rosterLoadRetries, delayMs: rosterLoadDelayMs })
         if (live) {
           setRosterRole(role); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
         }
