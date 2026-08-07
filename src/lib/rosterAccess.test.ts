@@ -27,7 +27,7 @@ describe('roster access invitations', () => {
     const invitationUrl = buildRosterInvitationUrl('https://fulboparejo.vercel.app', '/', 'token-de-prueba')
 
     expect(invitationUrl).toBe('https://fulboparejo.vercel.app/?invite=token-de-prueba')
-    expect(buildWhatsAppInvitationText(invitationUrl)).toBe('Te invito a sumarte al plantel de Fulbo Parejo. Abrí este link, iniciá sesión con Google y vas a tener acceso: https://fulboparejo.vercel.app/?invite=token-de-prueba')
+    expect(buildWhatsAppInvitationText(invitationUrl)).toBe('Te invito a sumarte al plantel de Fulbo Parejo. El link es válido durante 3 días y puede usarlo más de una persona. Abrí este link, iniciá sesión con Google y vas a tener acceso: https://fulboparejo.vercel.app/?invite=token-de-prueba')
     expect(new URL(buildWhatsAppInvitationUrl(invitationUrl)).searchParams.get('text')).toBe(buildWhatsAppInvitationText(invitationUrl))
   })
 
