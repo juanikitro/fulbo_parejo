@@ -7,6 +7,7 @@ export type RosterAccessEntry = {
 
 export const canManageRosterAccess = (role: RosterRole | null) => role === 'owner' || role === 'technical'
 export const canEditRoster = (role: RosterRole | null) => role === 'owner' || role === 'technical'
+export const canPlanMatch = (role: RosterRole | null) => role === 'owner' || role === 'technical' || role === 'player'
 export const canInviteRole = (actor: RosterRole | null, invited: Exclude<RosterRole, 'owner'>) => actor === 'owner' || (actor === 'technical' && invited === 'player')
 
 export function buildRosterInvitationUrl(origin: string, pathname: string, token: string) {
