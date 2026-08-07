@@ -124,15 +124,26 @@ function buildProposal(players: Player[], chemistry: PairChemistry, includePosit
   }
 }
 
-export function findComparableSwap(player: Player, opponents: Player[]) {
-  const samePosition = opponents.filter((candidate) => candidate.preferredPosition === player.preferredPosition)
-  const sameLine = player.preferredPosition && !isGoalkeeper(player.preferredPosition)
-    ? opponents.filter((candidate) => candidate.preferredPosition && positionLine[candidate.preferredPosition] === positionLine[player.preferredPosition!])
-    : []
-  const sameGoalkeeperStatus = opponents.filter((candidate) => isGoalkeeper(candidate.preferredPosition) === isGoalkeeper(player.preferredPosition))
-  const compatible = samePosition.length ? samePosition : sameLine.length ? sameLine : sameGoalkeeperStatus
-  const candidate = [...compatible].sort((one, two) => Math.abs(operationalRating(one) - operationalRating(player)) - Math.abs(operationalRating(two) - operationalRating(player)))[0]
-  return candidate && Math.abs(operationalRating(candidate) - operationalRating(player)) <= 1.5 ? candidate : undefined
+export function findComparableSwap(player: Player, teammates: Player[], opponents: Player[]) {
+  const playerRating = operationalRating(player)
+  const teammateTotal = total(teammates)
+  const opponentTotal = total(opponents)
+
+  return [...opponents]
+    .filter((candidate) => isGoalkeeper(candidate.preferredPosition) === isGoalkeeper(player.preferredPosition))
+    .sort((one, two) => {
+      const balanceGap = (candidate: Player) => Math.abs(
+        (teammateTotal - playerRating + operationalRating(candidate)) / teammates.length
+        - (opponentTotal - operationalRating(candidate) + playerRating) / opponents.length,
+      )
+      const gapDifference = balanceGap(one) - balanceGap(two)
+      if (Math.abs(gapDifference) > 0.000001) return gapDifference
+
+      const samePositionDifference = Number(two.preferredPosition === player.preferredPosition) - Number(one.preferredPosition === player.preferredPosition)
+      if (samePositionDifference) return samePositionDifference
+
+      return Math.abs(operationalRating(one) - playerRating) - Math.abs(operationalRating(two) - playerRating)
+    })[0]
 }
 
 export function createMatchProposal(players: Player[], chemistry: PairChemistry = new Map(), chemistryWithSufficientEvidence: PairChemistry = new Map()): MatchProposal {
