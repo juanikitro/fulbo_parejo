@@ -33,18 +33,24 @@ describe('createMatchProposal', () => {
     expect(proposal.teamTwo.players).toHaveLength(2)
   })
 
-  it('swaps a player only with a similarly rated player in a compatible position', () => {
-    const selected = makePlayer('forward-7', 7, 'DC')
-    const candidate = findComparableSwap(selected, [
-      makePlayer('goalkeeper-7', 7, 'PO'),
-      makePlayer('forward-9', 9, 'DC'),
-      makePlayer('forward-7.2', 7.2, 'DC'),
+  it('prioritizes the swap that best balances team averages over position', () => {
+    const selected = makePlayer('forward-9', 9, 'DC')
+    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
+      makePlayer('forward-5', 5, 'DC'),
+      makePlayer('midfielder-8', 8, 'MC'),
     ])
-    expect(candidate?.id).toBe('forward-7.2')
+
+    expect(candidate?.id).toBe('midfielder-8')
   })
 
-  it('does not force a swap when the closest compatible player is too far in rating', () => {
-    expect(findComparableSwap(makePlayer('forward-7', 7, 'DC'), [makePlayer('forward-9', 9, 'DC')])).toBeUndefined()
+  it('uses the same position as a tiebreaker when swaps balance equally', () => {
+    const selected = makePlayer('forward-7', 7, 'DC')
+    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
+      makePlayer('defender-7', 7, 'DFC'),
+      makePlayer('forward-7', 7, 'DC'),
+    ])
+
+    expect(candidate?.id).toBe('forward-7')
   })
 
   it('balances each exact position when compatible players are available', () => {
@@ -60,14 +66,14 @@ describe('createMatchProposal', () => {
     }
   })
 
-  it('prefers a swap in the same line when the exact position is unavailable', () => {
+  it('never swaps a goalkeeper with a field player', () => {
     const selected = makePlayer('centre-back', 7, 'DFC')
-    const candidate = findComparableSwap(selected, [
-      makePlayer('left-back', 7.2, 'DFI'),
-      makePlayer('midfielder', 7.1, 'MC'),
+    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
+      makePlayer('goalkeeper-7', 7, 'PO'),
+      makePlayer('midfielder-8', 8, 'MC'),
     ])
 
-    expect(candidate?.id).toBe('left-back')
+    expect(candidate?.id).toBe('midfielder-8')
   })
 
   it('keeps positive pairs together and separates negative pairs when ratings are equal', () => {
