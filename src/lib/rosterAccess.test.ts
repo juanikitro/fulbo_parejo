@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { buildRosterInvitationUrl, buildWhatsAppInvitationText, buildWhatsAppInvitationUrl, canInviteRole, canManageRosterAccess, generateWhatsAppInvitation, runOnce } from './rosterAccess'
+import { buildRosterInvitationUrl, buildWhatsAppInvitationText, buildWhatsAppInvitationUrl, canInviteRole, canManageRosterAccess, canPlanMatch, generateWhatsAppInvitation, runOnce } from './rosterAccess'
 
 describe('roster access invitations', () => {
   it('enables access management for the owner and technical staff', () => {
     expect(canManageRosterAccess('owner')).toBe(true)
     expect(canManageRosterAccess('technical')).toBe(true)
     expect(canManageRosterAccess('player')).toBe(false)
+  })
+
+  it('lets every roster role plan teams without granting roster editing', () => {
+    expect(canPlanMatch('owner')).toBe(true)
+    expect(canPlanMatch('technical')).toBe(true)
+    expect(canPlanMatch('player')).toBe(true)
+    expect(canPlanMatch(null)).toBe(false)
   })
 
   it('limits invitations to the roles each actor can grant', () => {
