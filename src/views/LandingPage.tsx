@@ -64,7 +64,7 @@ export default function LandingPage({ onLogin, themeControl }: { onLogin: () => 
 
   return <div className="landing">
     <header className="landing-masthead">
-      <div className="landing-wrap landing-masthead-inner"><h1 className="brand-wordmark">Fulbo<em>Parejo</em></h1>{themeControl}</div>
+      <div className="landing-wrap landing-masthead-inner"><h1>Fulbo<em>Parejo</em></h1>{themeControl}</div>
     </header>
 
     <section className="landing-cover">
