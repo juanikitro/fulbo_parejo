@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import BrandLogo from '../BrandLogo'
 
 const kickoffSteps = [
   { number: '1', title: 'Cargá el plantel', text: 'Nombre, media inicial, puesto preferido, ícono y color. Una sola vez.' },
@@ -65,7 +64,7 @@ export default function LandingPage({ onLogin, themeControl }: { onLogin: () => 
 
   return <div className="landing">
     <header className="landing-masthead">
-      <div className="landing-wrap landing-masthead-inner"><h1 className="brand-heading"><BrandLogo /></h1>{themeControl}</div>
+      <div className="landing-wrap landing-masthead-inner"><h1 className="brand-wordmark">Fulbo<em>Parejo</em></h1>{themeControl}</div>
     </header>
 
     <section className="landing-cover">
