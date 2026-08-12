@@ -10,7 +10,7 @@ import { playerColors, playerIcons, positionLabel } from './data/catalog'
 import { formatMatchShareText, formatShareMovement } from './lib/matchShare'
 import { retry } from './lib/retry'
 import { canEditRoster, canInviteRole, canManageRosterAccess, canPlanMatch, generateWhatsAppInvitation, runOnce, type RosterAccessEntry, type RosterRole } from './lib/rosterAccess'
-import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, loadRosterRole, manageMatchHistory, recordMatch, removeRosterAccess, renameRoster, saveActiveRosterId, setArchived, transferRosterOwnership, updatePlayer, updateRosterAccessRole, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
+import { acceptRosterInvitation, createPlayer, createRoster, createRosterInvitation, loadAccessibleRosters, loadActiveRosterId, loadChemistryHistory, loadHistory, loadLatestPlayerOffsets, loadPlayerGoalTotals, loadPlayerMatchHistory, loadPlayers, loadRosterAccess, loadRosterRole, manageMatchHistory, recordMatch, removeRosterAccess, renameRoster, saveActiveRosterId, setArchived, transferRosterOwnership, updatePlayer, updateRosterAccessRole, type HistoryEntry, type PlayerMatchHistoryEntry, type RosterSummary } from './lib/repository'
 import { authErrorMessage } from './lib/authCallback'
 import { signInWithGoogle, signOut, supabase } from './lib/supabase'
 import { isAdmin } from './admin/api'
@@ -144,15 +144,17 @@ function PlayerEditor({
   </div>
 }
 
-function ResultEditor({ result, goalDifference, saving, participants, performanceRatings, onClose, onGoalDifferenceChange, onPerformanceChange, onSave, onResultChange }: {
+function ResultEditor({ result, goalDifference, saving, participants, performanceRatings, goals, onClose, onGoalDifferenceChange, onPerformanceChange, onGoalsChange, onSave, onResultChange }: {
   result: RecordedResult
   goalDifference: string
   saving: boolean
   participants: Pick<Player, 'id' | 'name' | 'icon' | 'color'>[]
   performanceRatings: ReadonlyMap<string, PerformanceRating>
+  goals: ReadonlyMap<string, number | null>
   onClose: () => void
   onGoalDifferenceChange: (value: string) => void
   onPerformanceChange: (playerId: string, rating: PerformanceRating) => void
+  onGoalsChange: (playerId: string, goals: number | null) => void
   onSave: () => void
   onResultChange?: (result: RecordedResult) => void
 }) {
@@ -162,7 +164,7 @@ function ResultEditor({ result, goalDifference, saving, participants, performanc
       <div className="form-heading"><div><p className="eyebrow">3 · RESULTADO</p><h2 id="result-editor-title">Registrar partido</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       {onResultChange ? <div className="modal-result-actions"><button type="button" className={result === 'teamOne' ? 'selected orange-result' : 'orange-result'} onClick={() => onResultChange('teamOne')}>Ganó Claro</button><button type="button" className={result === 'draw' ? 'selected draw-result' : 'draw-result'} onClick={() => onResultChange('draw')}>Empate</button><button type="button" className={result === 'teamTwo' ? 'selected blue-result' : 'blue-result'} onClick={() => onResultChange('teamTwo')}>Ganó Oscuro</button></div> : <p className="result-choice">{resultLabel}</p>}
       <label className="field-label" htmlFor="goal-difference">🥅 Diferencia de goles <small>opcional</small><input id="goal-difference" type="number" min="0" step="1" placeholder="Ej. 2" value={goalDifference} onChange={(event) => onGoalDifferenceChange(event.target.value)} /></label>
-      <fieldset className="performance-field"><legend>⭐ ¿Cómo jugó cada uno?</legend><p>Normal está seleccionado por defecto.</p><div className="performance-list">{participants.map((player) => { const rating = performanceRatings.get(player.id) ?? 0; return <div className="performance-player" key={player.id}><span style={{ backgroundColor: player.color }}>{player.icon}</span><div className="performance-name"><strong>{player.name}</strong><small>{performanceLevels.find((level) => level.value === rating)!.label}</small></div><div className="performance-options" role="group" aria-label={`Cómo jugó ${player.name}`}>{performanceLevels.map(({ value, label }) => <button type="button" aria-label={`${player.name}: ${label}`} aria-pressed={rating === value} className={`performance-option performance-${value + 2}${rating === value ? ' selected' : ''}`} key={value} title={label} onClick={() => onPerformanceChange(player.id, value)}>{performanceSymbols[value]}</button>)}</div></div>})}</div></fieldset>
+      <fieldset className="performance-field"><legend>⭐ ¿Cómo jugó cada uno?</legend><p>Normal está seleccionado por defecto. Los goles son opcionales.</p><div className="performance-list">{participants.map((player) => { const rating = performanceRatings.get(player.id) ?? 0; return <div className="performance-player" key={player.id}><span style={{ backgroundColor: player.color }}>{player.icon}</span><div className="performance-name"><strong>{player.name}</strong><small>{performanceLevels.find((level) => level.value === rating)!.label}</small></div><label className="goals-input"><span>⚽ Goles</span><input aria-label={`Goles de ${player.name}`} type="number" min="0" step="1" placeholder="—" value={goals.get(player.id) ?? ''} onChange={(event) => onGoalsChange(player.id, event.target.value === '' ? null : Number(event.target.value))} /></label><div className="performance-options" role="group" aria-label={`Cómo jugó ${player.name}`}>{performanceLevels.map(({ value, label }) => <button type="button" aria-label={`${player.name}: ${label}`} aria-pressed={rating === value} className={`performance-option performance-${value + 2}${rating === value ? ' selected' : ''}`} key={value} title={label} onClick={() => onPerformanceChange(player.id, value)}>{performanceSymbols[value]}</button>)}</div></div>})}</div></fieldset>
       <div className="modal-actions"><button type="button" className="cancel-button" onClick={onClose}>Cancelar</button><button className="save-player" disabled={saving} onClick={onSave}>Guardar resultado ✓</button></div>
     </section>
   </div>
@@ -304,6 +306,7 @@ export default function App() {
   const [rosterRole, setRosterRole] = useState<RosterRole | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [latestOffsets, setLatestOffsets] = useState(new Map<string, number>())
+  const [playerGoalTotals, setPlayerGoalTotals] = useState(new Map<string, number>())
   const [chemistry, setChemistry] = useState<PairChemistry>(new Map())
   const [chemistryWithEvidence, setChemistryWithEvidence] = useState<PairChemistry>(new Map())
   const [chemistryPairs, setChemistryPairs] = useState<ChemistryPair[]>([])
@@ -323,6 +326,7 @@ export default function App() {
   const [historyResult, setHistoryResult] = useState<RecordedResult>('draw')
   const [goalDifference, setGoalDifference] = useState('')
   const [performanceRatings, setPerformanceRatings] = useState<Map<string, PerformanceRating>>(new Map())
+  const [playerGoals, setPlayerGoals] = useState<Map<string, number | null>>(new Map())
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null)
   const [playerMatchHistory, setPlayerMatchHistory] = useState<PlayerMatchHistoryEntry[]>([])
   const [playerHistoryLoading, setPlayerHistoryLoading] = useState(false)
@@ -447,9 +451,9 @@ export default function App() {
     const load = async () => {
       setRosterLoading(true)
       try {
-        const [loadedPlayers, loadedHistory, loadedOffsets, loadedChemistry, role] = await retry(() => Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId), loadRosterRole(rosterId, userId)]), { retries: rosterLoadRetries, delayMs: rosterLoadDelayMs })
+        const [loadedPlayers, loadedHistory, loadedOffsets, loadedGoals, loadedChemistry, role] = await retry(() => Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadPlayerGoalTotals(rosterId), loadChemistryHistory(rosterId), loadRosterRole(rosterId, userId)]), { retries: rosterLoadRetries, delayMs: rosterLoadDelayMs })
         if (live) {
-          setRosterRole(role); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
+          setRosterRole(role); setPlayers(loadedPlayers); setLatestOffsets(loadedOffsets); setPlayerGoalTotals(loadedGoals); setChemistry(chemistryFromHistory(loadedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(loadedChemistry)); setChemistryPairs(chemistryPairsFromHistory(loadedChemistry)); setSelected(new Set()); setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setHistory(loadedHistory.entries); setHistoryHasMore(loadedHistory.hasMore)
         }
       } catch (error) { if (live) setMessage(error instanceof Error ? error.message : 'No se pudo cargar tu plantel.') }
       finally { if (live) setRosterLoading(false) }
@@ -462,10 +466,10 @@ export default function App() {
   const selectedPlayers = players.filter((player) => selected.has(player.id) && !player.archived)
   const activeRosterName = rosters.find((roster) => roster.id === rosterId)?.name
   const mean = (team: Team) => team.operationalRating / team.players.length
-  const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setMatchmakingExplanationOpen(false) }
+  const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setPlayerGoals(new Map()); setMatchmakingExplanationOpen(false) }
   const selectRoster = (nextRosterId: string) => {
     if (nextRosterId === rosterId) return
-    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); setRosterRole(null); closePlayerDetail(); setRosterId(nextRosterId)
+    discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setPlayerGoalTotals(new Map()); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); setRosterRole(null); closePlayerDetail(); setRosterId(nextRosterId)
     if (userId) void saveActiveRosterId(userId, nextRosterId).catch(() => setMessage('No pudimos recordar este plantel para tu próximo ingreso.'))
   }
   const hasUnsavedRosterWork = selected.size > 0 || Boolean(proposal || editorOpen || pendingResult || editingHistory)
@@ -546,17 +550,20 @@ export default function App() {
   const openResultEditor = (result: RecordedResult) => { if (!canEditRoster(rosterRole)) return
     if (!proposal) return
     setPerformanceRatings(new Map([...proposal.teamOne.players, ...proposal.teamTwo.players].map((player) => [player.id, 0] as const)))
+    setPlayerGoals(new Map([...proposal.teamOne.players, ...proposal.teamTwo.players].map((player) => [player.id, null] as const)))
     setPendingResult(result)
   }
-  const closeResultEditor = () => { setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
+  const closeResultEditor = () => { setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setPlayerGoals(new Map()) }
   const openHistoryEditor = (entry: HistoryEntry) => { if (!canEditRoster(rosterRole)) return
     setEditingHistory(entry)
     setHistoryResult(entry.outcome === 'team_one' ? 'teamOne' : entry.outcome === 'team_two' ? 'teamTwo' : 'draw')
     setGoalDifference(entry.goalDifference === null ? '' : String(entry.goalDifference))
     setPerformanceRatings(new Map(entry.playerOffsets.map(({ playerId, performanceRating }) => [playerId, performanceRating] as const)))
+    setPlayerGoals(new Map(entry.playerOffsets.map(({ playerId, goals }) => [playerId, goals ?? null] as const)))
   }
-  const closeHistoryEditor = () => { setEditingHistory(null); setGoalDifference(''); setPerformanceRatings(new Map()) }
+  const closeHistoryEditor = () => { setEditingHistory(null); setGoalDifference(''); setPerformanceRatings(new Map()); setPlayerGoals(new Map()) }
   const setPlayerPerformance = (playerId: string, rating: PerformanceRating) => setPerformanceRatings((current) => new Map(current).set(playerId, rating))
+  const setPlayerGoalsForMatch = (playerId: string, goals: number | null) => setPlayerGoals((current) => new Map(current).set(playerId, goals))
   const loadMoreHistory = async () => {
     if (!rosterId || historyLoadingMore || !historyHasMore) return
     setHistoryLoadingMore(true)
@@ -630,9 +637,10 @@ export default function App() {
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
-      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, margin, performanceRatings)
-      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Resultado guardado y medias actualizadas.')
+      if ([...playerGoals.values()].some((goals) => goals !== null && (!Number.isInteger(goals) || goals < 0))) throw new Error('Los goles deben ser enteros no negativos.')
+      await recordMatch(rosterId, proposal.teamOne, proposal.teamTwo, proposal.unassigned?.id, result, margin, performanceRatings, playerGoals)
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedGoals, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadPlayerGoalTotals(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setPlayerGoalTotals(updatedGoals); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Resultado guardado y medias actualizadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo registrar el resultado.') } finally { setSaving(false) }
   }
   const saveHistoryEdit = async () => {
@@ -641,9 +649,10 @@ export default function App() {
     try {
       const margin = goalDifference === '' ? undefined : Number(goalDifference)
       if (margin !== undefined && (!Number.isInteger(margin) || margin < 0)) throw new Error('La diferencia de goles debe ser un entero positivo.')
-      await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin, performanceRatings)
-      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
+      if ([...playerGoals.values()].some((goals) => goals !== null && (!Number.isInteger(goals) || goals < 0))) throw new Error('Los goles deben ser enteros no negativos.')
+      await manageMatchHistory(editingHistory.id, 'edit', historyResult === 'teamOne' ? 'team_one' : historyResult === 'teamTwo' ? 'team_two' : 'draw', margin, performanceRatings, playerGoals)
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedGoals, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadPlayerGoalTotals(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setPlayerGoalTotals(updatedGoals); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); closeHistoryEditor(); setMessage('Partido editado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo editar el partido.') } finally { setSaving(false) }
   }
   const deleteHistoryEntry = async (entry: HistoryEntry) => {
@@ -651,8 +660,8 @@ export default function App() {
     setSaving(true)
     try {
       await manageMatchHistory(entry.id, 'delete')
-      const [updatedPlayers, updatedHistory, updatedOffsets, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadChemistryHistory(rosterId)])
-      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Partido borrado y medias recalculadas.')
+      const [updatedPlayers, updatedHistory, updatedOffsets, updatedGoals, updatedChemistry] = await Promise.all([loadPlayers(rosterId), loadHistory(rosterId), loadLatestPlayerOffsets(rosterId), loadPlayerGoalTotals(rosterId), loadChemistryHistory(rosterId)])
+      setPlayers(updatedPlayers); setHistory(updatedHistory.entries); setHistoryHasMore(updatedHistory.hasMore); setLatestOffsets(updatedOffsets); setPlayerGoalTotals(updatedGoals); setChemistry(chemistryFromHistory(updatedChemistry)); setChemistryWithEvidence(chemistryWithSufficientEvidence(updatedChemistry)); setChemistryPairs(chemistryPairsFromHistory(updatedChemistry)); discardProposal(); setMessage('Partido borrado y medias recalculadas.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo borrar el partido.') } finally { setSaving(false) }
   }
   const logout = async () => {
@@ -738,12 +747,12 @@ export default function App() {
     <InstallPrompt authenticated={Boolean(userId)} afterMilestone={installReminderReady} open={installPromptOpen} onOpen={() => setInstallPromptOpen(true)} onClose={() => setInstallPromptOpen(false)} />
     {archiveNotice ? <NoticeToast message={`${archiveNotice.name} fue enviado a la papelera`} actionLabel={archivingPlayerId === archiveNotice.id ? 'Restaurando…' : 'Deshacer'} actionDisabled={archivingPlayerId === archiveNotice.id} onAction={() => void restore(archiveNotice)} onClose={() => setArchiveNotice(null)} /> : message && <NoticeToast message={message} onClose={() => setMessage(null)} />}
     <header className="topbar"><div><h1>Fulbo<em>Parejo</em></h1>{rosterId && <RosterSwitcher currentId={rosterId} rosters={rosters} userId={userId} saving={saving || rosterSaving} onSelect={requestRosterSelect} onCreate={saveRoster} onRename={saveRosterName} />}</div><div className="header-actions">{adminAvailable && <AdminDashboardButton onOpen={() => { window.location.hash = '#/admin' }} />}<InstallAppButton onOpen={() => setInstallPromptOpen(true)} /><SystemHelpButton onOpen={() => setRatingInfoOpen(true)} /><ThemeSelector preference={themePreference} onChange={changeThemePreference} />{canManageRosterAccess(rosterRole) && <button ref={inviteButtonRef} className="header-icon-button invite-button" aria-label="Acceso al plantel" title="Acceso al plantel" disabled={saving || rosterSaving} onClick={() => void openRosterAccess()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7.1l2-2a4 4 0 1 0-5.7-5.7l-1.1 1.1M14 10.5a4 4 0 0 0-5.7-.1l-2 2A4 4 0 1 0 12 18.1l1.1-1.1" /></svg></button>}<button className="header-icon-button logout-button" aria-label="Salir" title="Salir" disabled={saving || rosterSaving} onClick={() => void logout()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h9" /><path d="M11 12h9m-3-3 3 3-3 3" /></svg></button></div></header>
-    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab editable={canEditRoster(rosterRole)} activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
+    {tab === 'squad' && <Suspense fallback={<TabLoader />}><SquadTab editable={canEditRoster(rosterRole)} activePlayers={active} archivedPlayers={archivedPlayers} latestOffsets={latestOffsets} playerGoalTotals={playerGoalTotals} onCreatePlayer={() => openPlayerEditor()} onOpenPlayerDetail={openPlayerDetail} onEditPlayer={openPlayerEditor} onArchivePlayer={setArchiveCandidate} onRestorePlayer={restore} archivingPlayerId={archivingPlayerId} onExport={() => downloadJson(players)} /></Suspense>}
       {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow"><section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes juegan?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>{proposal && <><section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <button type="button" className="balance-gap-trigger" aria-label={`Ver por qué quedaron parejos: diferencia de ${fmt(proposal.balanceGap)} de media`} aria-haspopup="dialog" onClick={() => setMatchmakingExplanationOpen(true)}>Δ {fmt(proposal.balanceGap)}</button></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section><section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo, latestOffsets, activeRosterName)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section>{canEditRoster(rosterRole) && <section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section>}</>}</section>)}
     {tab === 'history' && <Suspense fallback={<TabLoader />}><HistoryTab editable={canEditRoster(rosterRole)} history={history} saving={saving} hasMore={historyHasMore} loadingMore={historyLoadingMore} onEdit={openHistoryEditor} onDelete={deleteHistoryEntry} onLoadMore={loadMoreHistory} /></Suspense>}
     {editorOpen && <PlayerEditor draft={draft} editingPlayer={editingPlayer} saving={saving} onClose={() => setEditorOpen(false)} onSubmit={(event) => void savePlayer(event)} onChange={setDraft} />}
-    {pendingResult && proposal && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} participants={[...proposal.teamOne.players, ...proposal.teamTwo.players]} performanceRatings={performanceRatings} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={(result) => setPendingResult(result)} onSave={() => void record(pendingResult)} />}
-    {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
+    {pendingResult && proposal && <ResultEditor result={pendingResult} goalDifference={goalDifference} saving={saving} participants={[...proposal.teamOne.players, ...proposal.teamTwo.players]} performanceRatings={performanceRatings} goals={playerGoals} onClose={closeResultEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onGoalsChange={setPlayerGoalsForMatch} onResultChange={(result) => setPendingResult(result)} onSave={() => void record(pendingResult)} />}
+    {editingHistory && <ResultEditor result={historyResult} goalDifference={goalDifference} saving={saving} participants={historyParticipants} performanceRatings={performanceRatings} goals={playerGoals} onClose={closeHistoryEditor} onGoalDifferenceChange={setGoalDifference} onPerformanceChange={setPlayerPerformance} onGoalsChange={setPlayerGoalsForMatch} onResultChange={setHistoryResult} onSave={() => void saveHistoryEdit()} />}
     {detailPlayer && <PlayerDetail player={detailPlayer} players={players} history={playerMatchHistory} chemistryPairs={chemistryPairs} loading={playerHistoryLoading} error={playerHistoryError} onClose={closePlayerDetail} />}
     {rosterAccessOpen && (rosterRole === 'owner' || rosterRole === 'technical') && <RosterAccessDialog actorRole={rosterRole} entries={rosterAccessEntries} loading={rosterAccessLoading} loadError={rosterAccessLoadError} inviteError={invitationError} inviting={invitationLoading} actionUserId={rosterAccessActionUserId} onClose={closeRosterAccess} onInvite={(role) => void invite(role)} onChangeRole={(entry, role) => void changeRosterAccessRole(entry, role)} onRemove={(entry) => void removeRosterAccessEntry(entry)} onTransfer={(entry) => void transferOwnership(entry)} />}
     {rosterSetupOpen && <RosterNameDialog title="Tu primer plantel" saving={rosterSaving} onSave={saveRoster} />}
