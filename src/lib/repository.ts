@@ -22,7 +22,7 @@ export type HistoryEntry = {
   createdAt: string
   outcome: 'team_one' | 'team_two' | 'draw'
   goalDifference: number | null
-  playerOffsets: { playerId: string; playerName: string; offset: number; performanceRating: PerformanceRating }[]
+  playerOffsets: { playerId: string; playerName: string; offset: number; performanceRating: PerformanceRating; goals?: number | null }[]
 }
 export type PlayerMatchHistoryEntry = {
   id: string
@@ -31,14 +31,16 @@ export type PlayerMatchHistoryEntry = {
   goalDifference: number | null
   offset: number
   performanceRating: PerformanceRating
+  goals?: number | null
 }
 export type RosterSummary = { id: string; name: string; ownerId: string }
 export type HistoryPage = { entries: HistoryEntry[]; hasMore: boolean }
 type HistoryResult = { outcome: HistoryEntry['outcome']; goal_difference: number | null }
-type HistoryParticipant = { rating_offset: number | string; performance_rating: PerformanceRating; players: { id: string; name: string } | { id: string; name: string }[] | null }
+type HistoryParticipant = { rating_offset: number | string; performance_rating: PerformanceRating; goals?: number | string | null; players: { id: string; name: string } | { id: string; name: string }[] | null }
 type HistoryRow = { id: string; created_at: string; match_results: HistoryResult | HistoryResult[] | null; match_participants: HistoryParticipant[] | null }
 type ChemistryHistoryRow = { match_results: { outcome: ChemistryMatch['outcome'] } | { outcome: ChemistryMatch['outcome'] }[] | null; match_participants: { player_id: string; team: 1 | 2 }[] | null }
-type PlayerHistoryRow = { match_id: string; team: 1 | 2; rating_offset: number | string; performance_rating: PerformanceRating; matches: { created_at: string; match_results: HistoryResult | HistoryResult[] | null } | { created_at: string; match_results: HistoryResult | HistoryResult[] | null }[] | null }
+type PlayerHistoryRow = { match_id: string; team: 1 | 2; rating_offset: number | string; performance_rating: PerformanceRating; goals?: number | string | null; matches: { created_at: string; match_results: HistoryResult | HistoryResult[] | null } | { created_at: string; match_results: HistoryResult | HistoryResult[] | null }[] | null }
+type PlayerGoalRow = { player_id: string; goals: number | string | null }
 
 const client = () => {
   if (!supabase) throw new Error('Falta configurar Supabase.')
@@ -195,7 +197,7 @@ export const toHistoryEntries = (rows: HistoryRow[]): HistoryEntry[] => rows.fla
   const result = Array.isArray(match.match_results) ? match.match_results[0] : match.match_results
   const playerOffsets = (match.match_participants ?? []).flatMap((participant) => {
     const player = Array.isArray(participant.players) ? participant.players[0] : participant.players
-    return player ? [{ playerId: player.id, playerName: player.name, offset: Number(participant.rating_offset), performanceRating: participant.performance_rating ?? 0 }] : []
+    return player ? [{ playerId: player.id, playerName: player.name, offset: Number(participant.rating_offset), performanceRating: participant.performance_rating ?? 0, goals: participant.goals == null ? null : Number(participant.goals) }] : []
   })
   return result ? [{ id: match.id, createdAt: match.created_at, outcome: result.outcome, goalDifference: result.goal_difference, playerOffsets }] : []
 })
@@ -213,6 +215,12 @@ export const latestPlayerOffsets = (history: HistoryEntry[]) => {
   return offsets
 }
 
+export const playerGoalTotals = (rows: PlayerGoalRow[]) => {
+  const totals = new Map<string, number>()
+  for (const row of rows) if (row.goals != null) totals.set(row.player_id, (totals.get(row.player_id) ?? 0) + Number(row.goals))
+  return totals
+}
+
 export const toChemistryHistory = (rows: ChemistryHistoryRow[]): ChemistryMatch[] => rows.flatMap((match) => {
   const result = Array.isArray(match.match_results) ? match.match_results[0] : match.match_results
   if (!result) return []
@@ -226,11 +234,11 @@ export const toPlayerMatchHistoryEntries = (rows: PlayerHistoryRow[]): PlayerMat
   const matchResult = match && (Array.isArray(match.match_results) ? match.match_results[0] : match.match_results)
   if (!match || !matchResult) return []
   const result: PlayerMatchHistoryEntry['result'] = matchResult.outcome === 'draw' ? 'draw' : (matchResult.outcome === 'team_one') === (participant.team === 1) ? 'win' : 'loss'
-  return [{ id: participant.match_id, createdAt: match.created_at, result, goalDifference: matchResult.goal_difference, offset: Number(participant.rating_offset), performanceRating: participant.performance_rating ?? 0 }]
+  return [{ id: participant.match_id, createdAt: match.created_at, result, goalDifference: matchResult.goal_difference, offset: Number(participant.rating_offset), performanceRating: participant.performance_rating ?? 0, goals: participant.goals == null ? null : Number(participant.goals) }]
 }).sort((one, two) => two.createdAt.localeCompare(one.createdAt) || two.id.localeCompare(one.id))
 
 export async function loadHistory(rosterId: string, offset = 0, pageSize = 20): Promise<HistoryPage> {
-  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,performance_rating,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + pageSize)
+  const response = await client().from('matches').select('id,created_at,match_results(outcome,goal_difference),match_participants(rating_offset,performance_rating,goals,players(id,name))').eq('roster_id', rosterId).eq('status', 'completed').order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + pageSize)
   if (response.error) throw response.error
   return toHistoryPage(response.data as unknown as HistoryRow[], pageSize)
 }
@@ -241,6 +249,12 @@ export async function loadLatestPlayerOffsets(rosterId: string) {
   return latestPlayerOffsets(toHistoryEntries(response.data as unknown as HistoryRow[]))
 }
 
+export async function loadPlayerGoalTotals(rosterId: string) {
+  const response = await client().from('match_participants').select('player_id,goals,matches!inner(roster_id,status)').eq('matches.roster_id', rosterId).eq('matches.status', 'completed')
+  if (response.error) throw response.error
+  return playerGoalTotals(response.data as PlayerGoalRow[])
+}
+
 export async function loadChemistryHistory(rosterId: string) {
   const response = await client().from('matches').select('match_results(outcome),match_participants(player_id,team)').eq('roster_id', rosterId).eq('status', 'completed')
   if (response.error) throw response.error
@@ -248,18 +262,20 @@ export async function loadChemistryHistory(rosterId: string) {
 }
 
 export async function loadPlayerMatchHistory(rosterId: string, playerId: string) {
-  const response = await client().from('match_participants').select('match_id,team,rating_offset,performance_rating,matches!inner(created_at,roster_id,status,match_results(outcome,goal_difference))').eq('player_id', playerId).eq('matches.roster_id', rosterId).eq('matches.status', 'completed')
+  const response = await client().from('match_participants').select('match_id,team,rating_offset,performance_rating,goals,matches!inner(created_at,roster_id,status,match_results(outcome,goal_difference))').eq('player_id', playerId).eq('matches.roster_id', rosterId).eq('matches.status', 'completed')
   if (response.error) throw response.error
   return toPlayerMatchHistoryEntries(response.data as unknown as PlayerHistoryRow[])
 }
 
-export async function manageMatchHistory(matchId: string, action: 'edit' | 'delete', outcome?: HistoryEntry['outcome'], goalDifference?: number, performanceRatings?: ReadonlyMap<string, PerformanceRating>) {
+const participantRatings = (performanceRatings: ReadonlyMap<string, PerformanceRating>, goals: ReadonlyMap<string, number | null>) => [...performanceRatings.entries()].map(([player_id, performance_rating]) => ({ player_id, performance_rating, goals: goals.get(player_id) ?? null }))
+
+export async function manageMatchHistory(matchId: string, action: 'edit' | 'delete', outcome?: HistoryEntry['outcome'], goalDifference?: number, performanceRatings: ReadonlyMap<string, PerformanceRating> = new Map(), goals: ReadonlyMap<string, number | null> = new Map()) {
   const response = action === 'edit'
     ? await client().rpc('manage_match_history_with_performance', {
       p_match_id: matchId,
       p_outcome: outcome ?? null,
       p_goal_difference: goalDifference ?? null,
-      p_performance_ratings: [...(performanceRatings ?? new Map<string, PerformanceRating>()).entries()].map(([player_id, performance_rating]) => ({ player_id, performance_rating })),
+      p_performance_ratings: participantRatings(performanceRatings, goals),
     })
     : await client().rpc('manage_match_history', {
     p_match_id: matchId,
@@ -270,7 +286,7 @@ export async function manageMatchHistory(matchId: string, action: 'edit' | 'dele
   if (response.error) throw response.error
 }
 
-export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team, unassignedId: string | undefined, result: RecordedResult, goalDifference?: number, performanceRatings: ReadonlyMap<string, PerformanceRating> = new Map()) {
+export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team, unassignedId: string | undefined, result: RecordedResult, goalDifference?: number, performanceRatings: ReadonlyMap<string, PerformanceRating> = new Map(), goals: ReadonlyMap<string, number | null> = new Map()) {
   const response = await client().rpc('record_match', {
     p_roster_id: rosterId,
     p_team_one: teamOne.players.map((player) => player.id),
@@ -278,7 +294,7 @@ export async function recordMatch(rosterId: string, teamOne: Team, teamTwo: Team
     p_unassigned_player_id: unassignedId ?? null,
     p_outcome: result === 'teamOne' ? 'team_one' : result === 'teamTwo' ? 'team_two' : 'draw',
     p_goal_difference: goalDifference ?? null,
-    p_performance_ratings: [...performanceRatings.entries()].map(([player_id, performance_rating]) => ({ player_id, performance_rating })),
+    p_performance_ratings: participantRatings(performanceRatings, goals),
   })
   if (response.error) throw response.error
   return response.data as string

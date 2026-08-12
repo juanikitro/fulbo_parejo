@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestPlayerOffsets, rosterNameError, toChemistryHistory, toHistoryEntries, toHistoryPage, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
+import { latestPlayerOffsets, playerGoalTotals, rosterNameError, toChemistryHistory, toHistoryEntries, toHistoryPage, toPlayerMatchHistoryEntries, type HistoryEntry } from './repository'
 
 describe('roster names', () => {
   it('requires a concise non-empty name', () => {
@@ -30,13 +30,13 @@ describe('toHistoryEntries', () => {
       id: 'match-2',
       created_at: '2026-07-31T13:00:00.000Z',
       match_results: { outcome: 'team_two', goal_difference: null },
-      match_participants: [{ rating_offset: '-0.18', performance_rating: 1, players: { id: 'nico', name: 'Nico' } }],
+      match_participants: [{ rating_offset: '-0.18', performance_rating: 1, goals: 2, players: { id: 'nico', name: 'Nico' } }],
     }] as unknown as Parameters<typeof toHistoryEntries>[0])).toEqual([{
       id: 'match-2',
       createdAt: '2026-07-31T13:00:00.000Z',
       outcome: 'team_two',
       goalDifference: null,
-      playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: -0.18, performanceRating: 1 }],
+      playerOffsets: [{ playerId: 'nico', playerName: 'Nico', offset: -0.18, performanceRating: 1, goals: 2 }],
     }])
   })
 
@@ -47,6 +47,17 @@ describe('toHistoryEntries', () => {
     ]
 
     expect(latestPlayerOffsets(history)).toEqual(new Map([['nico', 0.18], ['juan', -0.12]]))
+  })
+})
+
+describe('playerGoalTotals', () => {
+  it('sums recorded goals without converting missing values into zero-valued records', () => {
+    expect(playerGoalTotals([
+      { player_id: 'nico', goals: 2 },
+      { player_id: 'nico', goals: null },
+      { player_id: 'juan', goals: null },
+      { player_id: 'cami', goals: '0' },
+    ])).toEqual(new Map([['nico', 2], ['cami', 0]]))
   })
 })
 
@@ -79,14 +90,14 @@ describe('toChemistryHistory', () => {
 describe('toPlayerMatchHistoryEntries', () => {
   it('maps the result from the participant team and sorts newest first', () => {
     expect(toPlayerMatchHistoryEntries([{
-      match_id: 'old', team: 2, rating_offset: '-0.12', performance_rating: 2,
+      match_id: 'old', team: 2, rating_offset: '-0.12', performance_rating: 2, goals: null,
       matches: { created_at: '2026-07-30T13:00:00.000Z', match_results: { outcome: 'team_one', goal_difference: 1 } },
     }, {
-      match_id: 'new', team: 1, rating_offset: '0.18', performance_rating: 1,
+      match_id: 'new', team: 1, rating_offset: '0.18', performance_rating: 1, goals: 3,
       matches: { created_at: '2026-07-31T13:00:00.000Z', match_results: { outcome: 'team_one', goal_difference: 2 } },
     }] as Parameters<typeof toPlayerMatchHistoryEntries>[0])).toEqual([
-      { id: 'new', createdAt: '2026-07-31T13:00:00.000Z', result: 'win', goalDifference: 2, offset: 0.18, performanceRating: 1 },
-      { id: 'old', createdAt: '2026-07-30T13:00:00.000Z', result: 'loss', goalDifference: 1, offset: -0.12, performanceRating: 2 },
+      { id: 'new', createdAt: '2026-07-31T13:00:00.000Z', result: 'win', goalDifference: 2, offset: 0.18, performanceRating: 1, goals: 3 },
+      { id: 'old', createdAt: '2026-07-30T13:00:00.000Z', result: 'loss', goalDifference: 1, offset: -0.12, performanceRating: 2, goals: null },
     ])
   })
 })
