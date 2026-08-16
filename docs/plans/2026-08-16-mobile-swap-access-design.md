@@ -7,11 +7,11 @@ Mantener disponible el cambio de jugadores después de armar los equipos, inclus
 ## Diseño
 
 - Se conserva la flecha de cada jugador en pantallas con espacio suficiente.
-- Debajo de los equipos aparece un bloque `Cambiar jugadores` con ambos equipos y un botón amplio por jugador.
+- Debajo de `VS` y el delta de medias aparece un botón `↔` que abre un pop-up con ambos equipos y un botón amplio por jugador.
 - Cada botón reutiliza el intercambio automático existente. En modo custom mantiene la misma selección de dos jugadores; no recalcula el armado ni descarta el resultado pendiente.
 - En móvil, las listas pasan a una sola columna y los botones muestran nombre e ícono, sin depender de la media ni de la flecha comprimida.
 
 ## Validación
 
 - Compilación TypeScript/Vite y pruebas existentes.
-- Verificación manual en viewport móvil: aplicar un cambio desde el bloque, conservar los equipos modificados y abrir el registro de resultado.
+- Verificación manual en viewport móvil: abrir el pop-up desde `↔`, aplicar un cambio, conservar los equipos modificados y abrir el registro de resultado.

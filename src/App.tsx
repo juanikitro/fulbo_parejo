@@ -69,18 +69,22 @@ function OffsetIndicator({ offset }: { offset: number | undefined }) {
   return <small className={`rating-offset ${positive ? 'positive-offset' : 'negative-offset'}`} aria-label={`${positive ? 'Subió' : 'Bajó'} ${Math.abs(offset).toFixed(2)} puntos`}>{positive ? '↑' : '↓'} {positive ? '+' : ''}{fmt(offset)}</small>
 }
 
-function TeamSwapAccess({ teamOne, teamTwo, customMode, manualSelection, onSelect }: {
+function TeamSwapDialog({ teamOne, teamTwo, customMode, manualSelection, onClose, onSelect }: {
   teamOne: Team
   teamTwo: Team
   customMode: boolean
   manualSelection: { playerId: string; team: 'teamOne' | 'teamTwo' } | null
+  onClose: () => void
   onSelect: (playerId: string, team: 'teamOne' | 'teamTwo') => void
 }) {
   const teams = [{ key: 'teamOne' as const, team: teamOne, tone: 'orange' }, { key: 'teamTwo' as const, team: teamTwo, tone: 'blue' }]
-  return <section className="panel team-swap-access" aria-labelledby="team-swap-access-title">
-    <div><p className="eyebrow">AJUSTE DEL ARMADO</p><h2 id="team-swap-access-title">Cambiar jugadores</h2><p>{customMode ? 'Elegí un jugador de cada equipo para intercambiarlos.' : 'Elegí un jugador y la app buscará un cambio compatible.'}</p></div>
-    <div className="team-swap-groups">{teams.map(({ key, team, tone }) => <section className={`team-swap-group ${tone}`} key={key}><h3>{team.name}</h3><div>{team.players.map((player) => { const selected = manualSelection?.playerId === player.id && manualSelection.team === key; return <button type="button" className={selected ? 'selected' : ''} aria-pressed={selected} aria-label={`${customMode ? 'Elegir' : 'Cambiar'} a ${player.name} de ${team.name}`} key={player.id} onClick={() => onSelect(player.id, key)}><span style={{ backgroundColor: player.color }}>{player.icon}</span><strong>{player.name}</strong><small>{selected ? 'Elegido' : 'Cambiar ↔'}</small></button> })}</div></section>)}</div>
-  </section>
+  return <div className="modal-backdrop" onMouseDown={onClose}>
+    <section className="result-modal team-swap-dialog" role="dialog" aria-modal="true" aria-labelledby="team-swap-dialog-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="form-heading"><div><p className="eyebrow">AJUSTE DEL ARMADO</p><h2 id="team-swap-dialog-title">Cambiar jugadores</h2></div><button type="button" aria-label="Cerrar cambios de jugadores" onClick={onClose}>×</button></div>
+      <p>{customMode ? 'Elegí un jugador de cada equipo para intercambiarlos.' : 'Elegí un jugador y la app buscará un cambio compatible.'}</p>
+      <div className="team-swap-groups">{teams.map(({ key, team, tone }) => <section className={`team-swap-group ${tone}`} key={key}><h3>{team.name}</h3><div>{team.players.map((player) => { const selected = manualSelection?.playerId === player.id && manualSelection.team === key; return <button type="button" className={selected ? 'selected' : ''} aria-pressed={selected} aria-label={`${customMode ? 'Elegir' : 'Cambiar'} a ${player.name} de ${team.name}`} key={player.id} onClick={() => onSelect(player.id, key)}><span style={{ backgroundColor: player.color }}>{player.icon}</span><strong>{player.name}</strong><small>{selected ? 'Elegido' : 'Cambiar ↔'}</small></button> })}</div></section>)}</div>
+    </section>
+  </div>
 }
 
 function RosterSwitchConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
@@ -349,6 +353,7 @@ export default function App() {
   const authenticatedUserId = useRef<string | null>(null)
   const [ratingInfoOpen, setRatingInfoOpen] = useState(false)
   const [matchmakingExplanationOpen, setMatchmakingExplanationOpen] = useState(false)
+  const [teamSwapOpen, setTeamSwapOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [rosterAccessOpen, setRosterAccessOpen] = useState(false)
@@ -480,7 +485,7 @@ export default function App() {
   const selectedPlayers = players.filter((player) => selected.has(player.id) && !player.archived)
   const activeRosterName = rosters.find((roster) => roster.id === rosterId)?.name
   const mean = (team: Team) => team.operationalRating / team.players.length
-  const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setPlayerGoals(new Map()); setMatchmakingExplanationOpen(false) }
+  const discardProposal = () => { setProposal(null); setBalancedProposal(null); setCustomMode(false); setManualSelection(null); setPendingResult(null); setGoalDifference(''); setPerformanceRatings(new Map()); setPlayerGoals(new Map()); setMatchmakingExplanationOpen(false); setTeamSwapOpen(false) }
   const selectRoster = (nextRosterId: string) => {
     if (nextRosterId === rosterId) return
     discardProposal(); setSelected(new Set()); setPlayers([]); setHistory([]); setHistoryHasMore(false); setPlayerGoalTotals(new Map()); setChemistryPairs([]); setEditorOpen(false); setEditingPlayer(null); setEditingHistory(null); setArchiveCandidate(null); setRosterRole(null); closePlayerDetail(); setRosterId(nextRosterId)
@@ -523,7 +528,7 @@ export default function App() {
     }
     finally { setRosterSaving(false) }
   }
-  const makeTeams = () => { if (!canPlanMatch(rosterRole)) return; try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
+  const makeTeams = () => { if (!canPlanMatch(rosterRole)) return; try { const next = createMatchProposal(selectedPlayers, chemistry, chemistryWithEvidence); setProposal(next); setBalancedProposal(next); setCustomMode(false); setManualSelection(null); setMatchmakingExplanationOpen(false); setTeamSwapOpen(false) } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo armar el partido.') } }
   const swapDirectly = (oneId: string, twoId: string) => {
     if (!proposal) return
     const teamOnePlayers = proposal.teamOne.players.map((player) => player.id === oneId ? proposal.teamTwo.players.find((entry) => entry.id === twoId)! : player)
@@ -765,8 +770,7 @@ export default function App() {
       {tab === 'match' && (rosterLoading ? <TabLoader panel label="Cargando tu plantel…" /> : <section className="match-flow">
         <section className="panel callup"><div className="panel-heading"><div><p className="eyebrow">1 · CONVOCATORIA</p><h2>¿Quiénes juegan?</h2><p className="callup-counter">👥 {selectedPlayers.length} de {active.length} confirmados</p></div><div className="callup-actions"><button className="make-teams-button" onClick={makeTeams}>Armar equipos →</button>{proposal && <button className={customMode ? 'custom-mode-toggle active' : 'custom-mode-toggle'} aria-label="Activar modo custom" title="Modo custom" onClick={() => { const next = !customMode; setCustomMode(next); setManualSelection(null); setMessage(next ? 'Modo custom activo: tocá un jugador de cada equipo para intercambiarlos libremente.' : 'Modo equilibrado activo.') }}>{customMode ? '✦' : '🛠️'}</button>}</div></div><div className="callup-groups">{groupCallupPlayers(active).map((group) => <section className="callup-group" key={group.label}><p className="callup-group-label">{group.label}</p><div className="callup-group-chips">{group.players.map((player) => <button className={selected.has(player.id) ? 'player-chip selected' : 'player-chip'} key={player.id} onClick={() => setSelected((current) => { const next = new Set(current); next.has(player.id) ? next.delete(player.id) : next.add(player.id); return next })}><span style={{ backgroundColor: player.color }}>{player.icon}</span>{player.name}</button>)}</div></section>)}</div>{active.length === 0 && <p className="muted">Primero cargá los jugadores desde Plantel.</p>}</section>
         {proposal && <>
-          <section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <button type="button" className="balance-gap-trigger" aria-label={`Ver por qué quedaron parejos: diferencia de ${fmt(proposal.balanceGap)} de media`} aria-haspopup="dialog" onClick={() => setMatchmakingExplanationOpen(true)}>Δ {fmt(proposal.balanceGap)}</button></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section>
-          <TeamSwapAccess teamOne={proposal.teamOne} teamTwo={proposal.teamTwo} customMode={customMode} manualSelection={manualSelection} onSelect={swapComparable} />
+          <section className="versus"><div className="team-card orange"><p className="eyebrow">{proposal.teamOne.name}</p><h2>{fmt(mean(proposal.teamOne))}</h2><span>media operativa</span>{proposal.teamOne.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamOne')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div><div className="vs">VS <button type="button" className="balance-gap-trigger" aria-label={`Ver por qué quedaron parejos: diferencia de ${fmt(proposal.balanceGap)} de media`} aria-haspopup="dialog" onClick={() => setMatchmakingExplanationOpen(true)}>Δ {fmt(proposal.balanceGap)}</button><button type="button" className="team-swap-trigger" aria-label="Abrir cambios de jugadores" aria-haspopup="dialog" title="Cambiar jugadores" onClick={() => setTeamSwapOpen(true)}>↔</button></div><div className="team-card blue"><p className="eyebrow">{proposal.teamTwo.name}</p><h2>{fmt(mean(proposal.teamTwo))}</h2><span>media operativa</span>{proposal.teamTwo.players.map((player) => <div className="team-player" key={player.id}><button type="button" className="team-player-detail" aria-label={`Ver ficha de ${player.name}`} onClick={() => void openPlayerDetail(player)}><i style={{ backgroundColor: player.color }}>{player.icon}</i>{player.name}</button><button type="button" className="team-player-swap" aria-label={`Cambiar a ${player.name} de equipo`} onClick={() => swapComparable(player.id, 'teamTwo')}><span className="team-player-details"><OffsetIndicator offset={latestOffsets.get(player.id)} /><small>{fmt(operationalRating(player))}</small></span>↔</button></div>)}</div></section>
           <section className="panel pitch-panel"><div className="panel-heading"><div><p className="eyebrow">2 · PIZARRA</p><h2>Cancha del partido</h2></div><button onClick={() => void shareMatch(proposal.teamOne, proposal.teamTwo, latestOffsets, activeRosterName)}>Compartir ↗</button></div><div className="pitches"><Pitch team={proposal.teamOne} /><Pitch team={proposal.teamTwo} /></div></section>{canEditRoster(rosterRole) && <section className="panel result"><p className="eyebrow">3 · RESULTADO</p><h2>¿Quién ganó?</h2><div className="result-actions"><button className="orange-result" disabled={saving} onClick={() => openResultEditor('teamOne')}>Ganó Claro</button><button className="draw-result" disabled={saving} onClick={() => openResultEditor('draw')}>Empate</button><button className="blue-result" disabled={saving} onClick={() => openResultEditor('teamTwo')}>Ganó Oscuro</button></div></section>}
         </>}
       </section>)}
@@ -780,6 +784,7 @@ export default function App() {
     {rosterSwitchTarget && <RosterSwitchConfirm onCancel={() => setRosterSwitchTarget(null)} onConfirm={() => { selectRoster(rosterSwitchTarget); setRosterSwitchTarget(null) }} />}
     {ratingInfoOpen && <RatingInfo onClose={() => setRatingInfoOpen(false)} />}
     {matchmakingExplanationOpen && proposal && <MatchmakingExplanationDialog proposal={proposal} onClose={() => setMatchmakingExplanationOpen(false)} />}
+    {teamSwapOpen && proposal && <TeamSwapDialog teamOne={proposal.teamOne} teamTwo={proposal.teamTwo} customMode={customMode} manualSelection={manualSelection} onClose={() => setTeamSwapOpen(false)} onSelect={swapComparable} />}
     {archiveCandidate && <ArchivePlayerDialog player={archiveCandidate} saving={archivingPlayerId === archiveCandidate.id} onClose={() => setArchiveCandidate(null)} onConfirm={() => void archive()} />}
     <footer className="cafecito-support">
       <a href="https://cafecito.app/juanikitro" rel="noopener noreferrer" target="_blank">☕ <span>Doname un cafecito</span></a>
