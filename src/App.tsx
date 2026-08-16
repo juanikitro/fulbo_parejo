@@ -178,7 +178,7 @@ function ResultEditor({ result, goalDifference, saving, participants, performanc
 }) {
   const resultLabel = result === 'teamOne' ? '🏳️ Ganó Claro' : result === 'teamTwo' ? '🌑 Ganó Oscuro' : '🤝 Empate'
   return <div className="modal-backdrop" onMouseDown={onClose}>
-    <section className="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+    <section className="result-modal result-editor-modal" role="dialog" aria-modal="true" aria-labelledby="result-editor-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="form-heading"><div><p className="eyebrow">3 · RESULTADO</p><h2 id="result-editor-title">Registrar partido</h2></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
       {onResultChange ? <div className="modal-result-actions"><button type="button" className={result === 'teamOne' ? 'selected orange-result' : 'orange-result'} onClick={() => onResultChange('teamOne')}>Ganó Claro</button><button type="button" className={result === 'draw' ? 'selected draw-result' : 'draw-result'} onClick={() => onResultChange('draw')}>Empate</button><button type="button" className={result === 'teamTwo' ? 'selected blue-result' : 'blue-result'} onClick={() => onResultChange('teamTwo')}>Ganó Oscuro</button></div> : <p className="result-choice">{resultLabel}</p>}
       <label className="field-label" htmlFor="goal-difference">🥅 Diferencia de goles <small>opcional</small><input id="goal-difference" type="number" min="0" step="1" placeholder="Ej. 2" value={goalDifference} onChange={(event) => onGoalDifferenceChange(event.target.value)} /></label>
