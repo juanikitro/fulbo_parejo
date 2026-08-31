@@ -58,7 +58,7 @@ const fromRow = (row: PlayerRow): Player => ({
 
 export async function ensureRoster(user: User) {
   const db = client()
-  const existing = await db.from('rosters').select('id').eq('owner_id', user.id).maybeSingle()
+  const existing = await db.from('rosters').select('id').eq('owner_id', user.id).order('created_at', { ascending: true }).limit(1).maybeSingle()
   if (existing.error) throw existing.error
   if (existing.data) return existing.data.id as string
   const membership = await db.from('roster_members').select('roster_id').eq('user_id', user.id).order('created_at').limit(1).maybeSingle()
