@@ -46,9 +46,14 @@ def main():
         os.environ["PGSSLROOTCERT"] = str(ca)
         os.environ["PGSSLMODE"] = "verify-full"
         os.environ["PGOPTIONS"] = "-c default_transaction_read_only=on"
-        run(["pg_dump", "--format=custom", "--file", str(root / "database.dump")])
+        # Supabase-managed schemas must be explicitly included, as in its CLI
+        # data export; the default archive selection can omit managed data.
+        run(["pg_dump", "--format=custom", "--schema=*", "--file", str(root / "database.dump")])
         toc = run(["pg_restore", "--list", str(root / "database.dump")])
         if b"TABLE DATA public" not in toc or b"TABLE DATA auth users" not in toc:
+            print(json.dumps({"event": "ARCHIVE_CONTENT_CHECK_FAILED", "data_entries": [
+                line for line in toc.decode().splitlines() if "TABLE DATA" in line
+            ]}), flush=True)
             raise RuntimeError("Archive does not contain required application and user data")
         (root / "archive-toc.txt").write_bytes(toc)
         with (root / "roles.sql").open("wb") as output:
