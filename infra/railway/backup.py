@@ -43,10 +43,13 @@ def main():
     s3.head_bucket(Bucket=bucket)
     with tempfile.TemporaryDirectory(prefix="fulbo-backup-") as folder:
         root = Path(folder)
-        ca = root / "source-ca.crt"
-        ca.write_text(os.environ["SOURCE_CA_PEM"], encoding="ascii")
-        os.environ["PGSSLROOTCERT"] = str(ca)
-        os.environ["PGSSLMODE"] = "verify-full"
+        if os.environ['PGHOST'] == 'postgres.railway.internal':
+            os.environ['PGSSLMODE'] = 'disable'  # Railway private WireGuard network
+        else:
+            ca = root / "source-ca.crt"
+            ca.write_text(os.environ["SOURCE_CA_PEM"], encoding="ascii")
+            os.environ["PGSSLROOTCERT"] = str(ca)
+            os.environ["PGSSLMODE"] = "verify-full"
         os.environ["PGOPTIONS"] = "-c default_transaction_read_only=on"
         # Supabase-managed schemas must be explicitly included, as in its CLI
         # data export; the default archive selection can omit managed data.
@@ -68,7 +71,7 @@ def main():
         # Include exact archive hashes, never plaintext data or credentials in logs.
         manifest = {"format": 1, "created_at": datetime.now(timezone.utc).isoformat(),
                     "phase": os.environ.get("BACKUP_PHASE", "preliminary"),
-                    "source": "tdohawovwsqzyhgjcjhm", "files": {}}
+                    "source": os.environ['PGHOST'], "files": {}}
         for name in ["database.dump", "roles.sql", "archive-toc.txt"]:
             payload = (root / name).read_bytes()
             manifest["files"][name] = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
