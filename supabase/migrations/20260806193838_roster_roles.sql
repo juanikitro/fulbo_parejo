@@ -3,14 +3,11 @@ alter table public.roster_access drop constraint if exists roster_members_role_c
 update public.roster_access set role = 'technical';
 alter table public.roster_access add constraint roster_access_role_check check (role in ('technical', 'player'));
 alter table public.roster_access alter column role set default 'technical';
-
 alter table public.roster_invitations add column role text not null default 'technical' check (role in ('technical', 'player'));
-
 create or replace function public.is_roster_member(p_roster_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select auth.uid() is not null and exists (select 1 from public.roster_access where roster_id = p_roster_id and user_id = auth.uid());
 $$;
-
 create or replace function public.can_write_roster(p_roster_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select auth.uid() is not null and exists (
@@ -19,26 +16,21 @@ returns boolean language sql stable security definer set search_path = public as
     select 1 from public.roster_access where roster_id = p_roster_id and user_id = auth.uid() and role = 'technical'
   );
 $$;
-
 revoke execute on function public.can_write_roster(uuid) from public, anon;
 grant execute on function public.can_write_roster(uuid) to authenticated;
-
 create view public.roster_members as
   select roster_id, user_id, role, created_at from public.roster_access where role = 'technical';
 revoke all on public.roster_members from public, anon, authenticated;
 grant select on public.roster_access to authenticated;
 revoke execute on function public.is_roster_member(uuid) from public, anon;
 grant execute on function public.is_roster_member(uuid) to authenticated;
-
 drop policy if exists "Members can view roster membership" on public.roster_access;
 create policy "Roster access is visible to managers or self" on public.roster_access for select to authenticated
 using (user_id = (select auth.uid()) or public.can_write_roster(roster_id));
-
 drop policy if exists "Members manage players" on public.players;
 drop policy if exists "Members manage matches" on public.matches;
 drop policy if exists "Members manage participants" on public.match_participants;
 drop policy if exists "Members manage results" on public.match_results;
-
 create policy "Roster readers view players" on public.players for select to authenticated
 using (public.is_roster_member(roster_id) or public.can_write_roster(roster_id));
 create policy "Managers write players" on public.players for all to authenticated
@@ -55,7 +47,6 @@ create policy "Roster readers view results" on public.match_results for select t
 using (exists (select 1 from public.matches where id = match_id and (public.is_roster_member(roster_id) or public.can_write_roster(roster_id))));
 create policy "Managers write results" on public.match_results for all to authenticated
 using (exists (select 1 from public.matches where id = match_id and public.can_write_roster(roster_id))) with check (exists (select 1 from public.matches where id = match_id and public.can_write_roster(roster_id)));
-
 drop function public.create_roster_invitation(uuid);
 create function public.create_roster_invitation(p_roster_id uuid, p_role text default 'player')
 returns table (token text, expires_at timestamptz)
@@ -68,7 +59,6 @@ begin
   return query select v_token, v_expires_at;
 end;
 $$;
-
 create or replace function public.accept_roster_invitation(p_token text) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare v_invitation public.roster_invitations;
@@ -81,7 +71,6 @@ begin
   return v_invitation.roster_id;
 end;
 $$;
-
 drop function public.list_roster_access(uuid);
 create function public.list_roster_access(p_roster_id uuid)
 returns table (user_id uuid, display_name text, access_role text)
@@ -93,7 +82,6 @@ language sql stable security definer set search_path = '' as $$
   from public.roster_access access join auth.users member_user on member_user.id = access.user_id where access.roster_id = p_roster_id and public.can_write_roster(p_roster_id)
   order by 3, 2;
 $$;
-
 create function public.update_roster_access_role(p_roster_id uuid, p_user_id uuid, p_role text) returns void
 language plpgsql security definer set search_path = public as $$ begin
   if p_role not in ('technical', 'player') or not exists (select 1 from public.rosters where id = p_roster_id and owner_id = auth.uid()) then raise exception 'Solo la persona propietaria puede cambiar roles.'; end if;

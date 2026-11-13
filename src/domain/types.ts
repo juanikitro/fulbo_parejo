@@ -24,17 +24,9 @@ export type Player = {
   learnedRating: number
   eloSeed: number
   preferredPosition?: Position
-  secondaryPosition?: Position
   icon: string
   color: string
   archived?: boolean
-}
-
-export function partitionPlayers(players: Player[]) {
-  return {
-    activePlayers: players.filter((player) => !player.archived),
-    archivedPlayers: players.filter((player) => player.archived),
-  }
 }
 
 export type Team = {
@@ -50,9 +42,6 @@ export type MatchProposal = {
   balanceGap: number
   goalkeeperCompensation: number
   positionPenalty: number
-  positionAdjustmentChangedResult: boolean
-  chemistryChangedResult: boolean
-  unassignedPreservesBalance?: boolean
 }
 
 export const operationalRating = (player: Player) =>

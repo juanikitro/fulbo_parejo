@@ -37,6 +37,5 @@ as $$
     )
   order by access_role, display_name;
 $$;
-
 revoke execute on function public.list_roster_access(uuid) from public, anon;
 grant execute on function public.list_roster_access(uuid) to authenticated;

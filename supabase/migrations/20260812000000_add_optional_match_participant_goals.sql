@@ -1,6 +1,5 @@
 alter table public.match_participants
   add column goals integer check (goals >= 0);
-
 create or replace function public.record_match(
   p_roster_id uuid,
   p_team_one jsonb,
@@ -95,7 +94,6 @@ begin
   return v_match_id;
 end;
 $$;
-
 create or replace function public.manage_match_history_with_performance(
   p_match_id uuid,
   p_outcome text,

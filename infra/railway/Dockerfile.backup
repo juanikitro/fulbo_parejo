@@ -1,0 +1,9 @@
+FROM postgres:17.6-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-boto3 python3-cryptography ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY infra/railway/backup.py /opt/backup.py
+COPY infra/railway/restore.py /opt/restore.py
+COPY infra/railway/verify-destination.py /opt/verify-destination.py
+COPY infra/railway/probe-api.py /opt/probe-api.py
+COPY infra/railway/final-sync.py /opt/final-sync.py
+RUN python3 -m py_compile /opt/backup.py /opt/restore.py /opt/verify-destination.py /opt/probe-api.py /opt/final-sync.py
+ENTRYPOINT ["python3", "/opt/backup.py"]

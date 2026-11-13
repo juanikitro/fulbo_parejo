@@ -1,0 +1,38 @@
+{
+    admin off
+    auto_https off
+}
+:{$PORT:8080} {
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Headers "authorization, x-client-info, apikey, content-type, prefer, accept-profile, content-profile, range, x-supabase-api-version"
+        Access-Control-Allow-Methods "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
+        Access-Control-Expose-Headers "content-range, range-unit, x-supabase-api-version"
+        Cache-Control "no-store"
+        X-Content-Type-Options "nosniff"
+    }
+    route {
+        @preflight method OPTIONS
+        respond @preflight "" 204
+        respond /healthz "ok" 200
+        @openAuth path /auth/v1/authorize /auth/v1/callback /auth/v1/verify /auth/v1/.well-known/jwks.json /auth/v1/health
+        handle @openAuth {
+            uri strip_prefix /auth/v1
+            reverse_proxy auth.railway.internal:9999
+        }
+        @validKey expression `{header.apikey} == "{$ANON_KEY}" || {header.apikey} == "{$SERVICE_ROLE_KEY}"`
+        handle @validKey {
+            handle_path /auth/v1/* {
+                reverse_proxy auth.railway.internal:9999
+            }
+            handle_path /rest/v1/* {
+                reverse_proxy rest.railway.internal:3000
+            }
+            handle /functions/v1/admin-metrics {
+                reverse_proxy admin-metrics.railway.internal:8000
+            }
+            respond "Not found" 404
+        }
+        respond "Invalid API key" 401
+    }
+}

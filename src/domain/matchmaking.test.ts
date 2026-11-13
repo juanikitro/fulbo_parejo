@@ -3,14 +3,13 @@ import { chemistryFromHistory } from './chemistry'
 import { createMatchProposal, findComparableSwap } from './matchmaking'
 import type { Player } from './types'
 
-const makePlayer = (id: string, rating: number, position?: Player['preferredPosition'], secondaryPosition?: Player['secondaryPosition']): Player => ({
+const makePlayer = (id: string, rating: number, position?: Player['preferredPosition']): Player => ({
   id,
   name: id,
   baseRating: rating,
   learnedRating: rating,
   eloSeed: rating,
   preferredPosition: position,
-  secondaryPosition,
   icon: '⚽',
   color: '#000',
 })
@@ -34,24 +33,18 @@ describe('createMatchProposal', () => {
     expect(proposal.teamTwo.players).toHaveLength(2)
   })
 
-  it('prioritizes the swap that best balances team averages over position', () => {
-    const selected = makePlayer('forward-9', 9, 'DC')
-    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
-      makePlayer('forward-5', 5, 'DC'),
-      makePlayer('midfielder-8', 8, 'MC'),
+  it('swaps a player only with a similarly rated player in a compatible position', () => {
+    const selected = makePlayer('forward-7', 7, 'DC')
+    const candidate = findComparableSwap(selected, [
+      makePlayer('goalkeeper-7', 7, 'PO'),
+      makePlayer('forward-9', 9, 'DC'),
+      makePlayer('forward-7.2', 7.2, 'DC'),
     ])
-
-    expect(candidate?.id).toBe('midfielder-8')
+    expect(candidate?.id).toBe('forward-7.2')
   })
 
-  it('uses the same position as a tiebreaker when swaps balance equally', () => {
-    const selected = makePlayer('forward-7', 7, 'DC')
-    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
-      makePlayer('defender-7', 7, 'DFC'),
-      makePlayer('forward-7', 7, 'DC'),
-    ])
-
-    expect(candidate?.id).toBe('forward-7')
+  it('does not force a swap when the closest compatible player is too far in rating', () => {
+    expect(findComparableSwap(makePlayer('forward-7', 7, 'DC'), [makePlayer('forward-9', 9, 'DC')])).toBeUndefined()
   })
 
   it('balances each exact position when compatible players are available', () => {
@@ -67,35 +60,14 @@ describe('createMatchProposal', () => {
     }
   })
 
-  it('never swaps a goalkeeper with a field player', () => {
+  it('prefers a swap in the same line when the exact position is unavailable', () => {
     const selected = makePlayer('centre-back', 7, 'DFC')
-    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate-7', 7, 'MC')], [
-      makePlayer('goalkeeper-7', 7, 'PO'),
-      makePlayer('midfielder-8', 8, 'MC'),
+    const candidate = findComparableSwap(selected, [
+      makePlayer('left-back', 7.2, 'DFI'),
+      makePlayer('midfielder', 7.1, 'MC'),
     ])
 
-    expect(candidate?.id).toBe('midfielder-8')
-  })
-
-  it('uses a secondary goalkeeper only when a primary goalkeeper is unavailable', () => {
-    const proposal = createMatchProposal([
-      makePlayer('primary-goalkeeper', 7, 'PO'),
-      makePlayer('secondary-goalkeeper', 7, 'DFC', 'PO'),
-      makePlayer('a', 7), makePlayer('b', 7), makePlayer('c', 7), makePlayer('d', 7),
-    ])
-
-    expect(proposal.teamOne.players.some((player) => player.id === 'primary-goalkeeper')).toBe(true)
-    expect(proposal.teamTwo.players.some((player) => player.id === 'secondary-goalkeeper')).toBe(true)
-  })
-
-  it('prefers a primary position match over a secondary one for comparable swaps', () => {
-    const selected = makePlayer('centre-back', 7, 'DFC', 'MC')
-    const candidate = findComparableSwap(selected, [selected, makePlayer('teammate', 7)], [
-      makePlayer('secondary-match', 7, 'MC', 'DFC'),
-      makePlayer('primary-match', 7, 'DFC'),
-    ])
-
-    expect(candidate?.id).toBe('primary-match')
+    expect(candidate?.id).toBe('left-back')
   })
 
   it('keeps positive pairs together and separates negative pairs when ratings are equal', () => {

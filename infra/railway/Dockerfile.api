@@ -1,0 +1,4 @@
+FROM caddy:2.10.2-alpine
+COPY infra/railway/Caddyfile.api /etc/caddy/Caddyfile
+RUN ANON_KEY=validation-anon SERVICE_ROLE_KEY=validation-service caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+EXPOSE 8080
