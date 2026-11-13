@@ -39,4 +39,4 @@ begin
 
   return v_invitation.roster_id;
 end;
-$$;
+$$;;

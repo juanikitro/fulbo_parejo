@@ -20,7 +20,7 @@
             uri strip_prefix /auth/v1
             reverse_proxy auth.railway.internal:9999
         }
-        @validKey header apikey {$ANON_KEY} {$SERVICE_ROLE_KEY}
+        @validKey expression `{header.apikey} == "{$ANON_KEY}" || {header.apikey} == "{$SERVICE_ROLE_KEY}"`
         handle @validKey {
             handle_path /auth/v1/* {
                 reverse_proxy auth.railway.internal:9999

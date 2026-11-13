@@ -2,16 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+export const FULBO_PAREJO_SCHEMA = 'fulbo_parejo'
 
-export const supabase = url && key ? createClient(url, key) : null
+export const supabase = url && key
+  ? createClient(url, key, { db: { schema: FULBO_PAREJO_SCHEMA } })
+  : null
 
-export function authRedirectUrl(configuredUrl: string | undefined, currentUrl = window.location.href) {
-  const redirectTo = configuredUrl?.trim() || currentUrl
-  const invite = new URL(currentUrl).searchParams.get('invite')
-  if (!invite) return redirectTo
-  const redirectUrl = new URL(redirectTo)
-  redirectUrl.searchParams.set('invite', invite)
-  return redirectUrl.toString()
+export function authRedirectUrl(configuredUrl: string | undefined, currentOrigin = window.location.origin) {
+  return configuredUrl?.trim() || currentOrigin
 }
 
 export async function signInWithGoogle(redirectTo = authRedirectUrl(import.meta.env.VITE_SITE_URL)) {
