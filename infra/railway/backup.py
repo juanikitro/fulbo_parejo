@@ -36,8 +36,10 @@ def main():
         raise ValueError("BACKUP_ENCRYPTION_KEY must encode 32 bytes")
     s3 = boto3.client("s3", endpoint_url=os.environ["AWS_ENDPOINT_URL"],
                       region_name=os.environ["AWS_DEFAULT_REGION"],
-                      config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}))
+                      config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"},
+                                    connect_timeout=10, read_timeout=30, retries={"max_attempts": 2}))
     bucket = os.environ["BACKUP_BUCKET"]
+    print("BACKUP_BUCKET_CHECK", flush=True)
     s3.head_bucket(Bucket=bucket)
     with tempfile.TemporaryDirectory(prefix="fulbo-backup-") as folder:
         root = Path(folder)
@@ -48,7 +50,9 @@ def main():
         os.environ["PGOPTIONS"] = "-c default_transaction_read_only=on"
         # Supabase-managed schemas must be explicitly included, as in its CLI
         # data export; the default archive selection can omit managed data.
-        run(["pg_dump", "--format=custom", "--schema=*", "--file", str(root / "database.dump")])
+        print("BACKUP_DATABASE_EXPORT", flush=True)
+        run(["pg_dump", "--format=custom", "--schema=*", "--exclude-schema=pg_*",
+             "--exclude-schema=information_schema", "--file", str(root / "database.dump")])
         toc = run(["pg_restore", "--list", str(root / "database.dump")])
         if b"TABLE DATA public" not in toc or b"TABLE DATA auth users" not in toc:
             print(json.dumps({"event": "ARCHIVE_CONTENT_CHECK_FAILED", "data_entries": [
@@ -56,6 +60,7 @@ def main():
             ]}), flush=True)
             raise RuntimeError("Archive does not contain required application and user data")
         (root / "archive-toc.txt").write_bytes(toc)
+        print("BACKUP_ROLE_EXPORT", flush=True)
         with (root / "roles.sql").open("wb") as output:
             run(["pg_dumpall", "--roles-only", "--no-role-passwords"], output)
         # Include exact archive hashes, never plaintext data or credentials in logs.
@@ -76,6 +81,7 @@ def main():
         encrypted = header + nonce + AESGCM(key).encrypt(nonce, plaintext, header)
         digest = hashlib.sha256(encrypted).hexdigest()
         object_key = "migration/" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex + ".tar.gz.aesgcm"
+        print("BACKUP_ENCRYPTED_UPLOAD", flush=True)
         s3.put_object(Bucket=bucket, Key=object_key, Body=encrypted,
                       ContentType="application/octet-stream", Metadata={"sha256": digest})
         downloaded = s3.get_object(Bucket=bucket, Key=object_key)["Body"].read()
