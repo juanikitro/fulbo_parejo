@@ -4,6 +4,7 @@
 }
 :{$PORT:8080} {
     header {
+        defer
         Access-Control-Allow-Origin "*"
         Access-Control-Allow-Headers "authorization, x-client-info, apikey, content-type, prefer, accept-profile, content-profile, range, x-supabase-api-version"
         Access-Control-Allow-Methods "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
@@ -36,3 +37,4 @@
         respond "Invalid API key" 401
     }
 }
+
