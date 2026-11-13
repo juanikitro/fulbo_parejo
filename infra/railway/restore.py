@@ -81,6 +81,10 @@ def main():
         dump.write_bytes(data)
         selection = ["--schema=auth", "--schema=fulbo_parejo"]
         sql = run(["pg_restore", "--file=-", *selection, str(dump)])
+        print(json.dumps({"message": "RESTORE_ARCHIVE_SCHEMA", "auth_schema": b"CREATE SCHEMA auth;" in sql,
+                          "auth_users_table": b"CREATE TABLE auth.users" in sql,
+                          "app_schema": b"CREATE SCHEMA fulbo_parejo;" in sql,
+                          "app_table": b"CREATE TABLE fulbo_parejo.players" in sql}), flush=True)
         expected = copies(sql)
         restore_sql = root / "restore.sql"
         restore_sql.write_bytes(sql)
@@ -88,7 +92,12 @@ def main():
         # The destination is empty and inaccessible to clients. Replacing its
         # initial Auth schema preserves every source table, including migrations,
         # rather than discarding rows to fit an older bundled schema.
-        run(psql + ["--single-transaction", "-c", "DROP SCHEMA auth CASCADE;", "-f", str(restore_sql)])
+        prepare = "DROP SCHEMA auth CASCADE;"
+        if b"CREATE SCHEMA auth;" not in sql:
+            prepare += " CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;"
+        if b"CREATE SCHEMA fulbo_parejo;" not in sql:
+            prepare += " CREATE SCHEMA fulbo_parejo AUTHORIZATION postgres;"
+        run(psql + ["--single-transaction", "-c", prepare, "-f", str(restore_sql)])
         restored = run(["pg_dump", "--data-only", *selection])
         actual = copies(restored)
         if actual != expected:
