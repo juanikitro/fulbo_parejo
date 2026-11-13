@@ -1,0 +1,3 @@
+FROM supabase/postgres:17.6.1.136
+COPY infra/railway/99-service-roles.sql /docker-entrypoint-initdb.d/init-scripts/99-service-roles.sql
+CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
