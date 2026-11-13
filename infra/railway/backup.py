@@ -1,7 +1,7 @@
 """Read-only PostgreSQL archive, encrypted before upload to a private bucket.
 
-No retention deletions or source writes. This captures a preliminary snapshot;
-the migration's final snapshot must run after the separately verified write freeze.
+No source writes. Scheduled runs retain only the latest verified daily snapshot;
+older daily, weekly and migration archives are removed only after verification.
 """
 import base64
 import hashlib
@@ -102,14 +102,9 @@ def main():
                           "bytes": len(encrypted), "sha256": digest,
                           "phase": manifest["phase"], "database_restore_tested": False}), flush=True)
         if scheduled:
-            if now.weekday() == 6:
-                weekly = 'weekly/' + object_key.removeprefix('daily/')
-                s3.put_object(Bucket=bucket, Key=weekly, Body=encrypted,
-                              ContentType='application/octet-stream', Metadata={'sha256': digest})
-                assert hashlib.sha256(s3.get_object(Bucket=bucket, Key=weekly)['Body'].read()).hexdigest() == digest
-            # Delete only these job-owned prefixes after the new dump is verified.
-            # Keep newest snapshot for seven daily dates and four weekly dates.
-            for owned_prefix, keep in [('daily/', 7), ('weekly/', 4)]:
+            # Retention runs only after upload, checksum and decryption succeed.
+            # Keep one daily recovery point; no weekly or migration accumulation.
+            for owned_prefix, keep in [('daily/', 1), ('weekly/', 0), ('migration/', 0)]:
                 objects=[]
                 for page in s3.get_paginator('list_objects_v2').paginate(Bucket=bucket,Prefix=owned_prefix):
                     objects.extend(page.get('Contents', []))
