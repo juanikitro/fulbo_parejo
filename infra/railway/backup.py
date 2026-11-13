@@ -85,7 +85,10 @@ def main():
         header = b"FULBOBK1"
         encrypted = header + nonce + AESGCM(key).encrypt(nonce, plaintext, header)
         digest = hashlib.sha256(encrypted).hexdigest()
-        object_key = "migration/" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex + ".tar.gz.aesgcm"
+        now = datetime.now(timezone.utc)
+        scheduled = manifest['phase'] == 'scheduled'
+        prefix = 'daily/' if scheduled else 'migration/'
+        object_key = prefix + now.strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex + ".tar.gz.aesgcm"
         print("BACKUP_ENCRYPTED_UPLOAD", flush=True)
         s3.put_object(Bucket=bucket, Key=object_key, Body=encrypted,
                       ContentType="application/octet-stream", Metadata={"sha256": digest})
@@ -98,6 +101,31 @@ def main():
         print(json.dumps({"event": "ENCRYPTED_BACKUP_ROUNDTRIP_OK", "key": object_key,
                           "bytes": len(encrypted), "sha256": digest,
                           "phase": manifest["phase"], "database_restore_tested": False}), flush=True)
+        if scheduled:
+            if now.weekday() == 6:
+                weekly = 'weekly/' + object_key.removeprefix('daily/')
+                s3.put_object(Bucket=bucket, Key=weekly, Body=encrypted,
+                              ContentType='application/octet-stream', Metadata={'sha256': digest})
+                assert hashlib.sha256(s3.get_object(Bucket=bucket, Key=weekly)['Body'].read()).hexdigest() == digest
+            # Delete only these job-owned prefixes after the new dump is verified.
+            # Keep newest snapshot for seven daily dates and four weekly dates.
+            for owned_prefix, keep in [('daily/', 7), ('weekly/', 4)]:
+                objects=[]
+                for page in s3.get_paginator('list_objects_v2').paginate(Bucket=bucket,Prefix=owned_prefix):
+                    objects.extend(page.get('Contents', []))
+                dates=set()
+                removed=0
+                for obj in sorted(objects,key=lambda item:item['Key'],reverse=True):
+                    name=obj['Key'].removeprefix(owned_prefix)
+                    if not (len(name)>8 and name[:8].isdigit() and name.endswith('.tar.gz.aesgcm')):
+                        continue
+                    date=name[:8]
+                    if date not in dates and len(dates)<keep:
+                        dates.add(date)
+                    else:
+                        s3.delete_object(Bucket=bucket,Key=obj['Key'])
+                        removed+=1
+                print(json.dumps({'message':'BACKUP_RETENTION','prefix':owned_prefix,'kept_dates':len(dates),'removed':removed}),flush=True)
 
 
 if __name__ == "__main__":
