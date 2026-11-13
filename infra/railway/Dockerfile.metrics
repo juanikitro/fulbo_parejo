@@ -1,0 +1,6 @@
+FROM denoland/deno:2.9.8
+WORKDIR /app
+COPY infra/railway/admin-metrics.ts ./admin-metrics.ts
+RUN deno cache admin-metrics.ts && deno check admin-metrics.ts
+USER deno
+CMD ["run", "--allow-env", "--allow-net", "admin-metrics.ts"]
