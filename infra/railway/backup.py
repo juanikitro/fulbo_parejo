@@ -54,7 +54,9 @@ def main():
         run(["pg_dump", "--format=custom", "--schema=*", "--exclude-schema=pg_*",
              "--exclude-schema=information_schema", "--file", str(root / "database.dump")])
         toc = run(["pg_restore", "--list", str(root / "database.dump")])
-        if b"TABLE DATA public" not in toc or b"TABLE DATA auth users" not in toc:
+        required_tables = ["admin_users", "match_participants", "match_results", "matches",
+                           "players", "roster_access", "roster_invitations", "roster_preferences", "rosters"]
+        if any(f"TABLE DATA fulbo_parejo {name} ".encode() not in toc for name in required_tables) or b"TABLE DATA auth users " not in toc:
             print(json.dumps({"event": "ARCHIVE_CONTENT_CHECK_FAILED", "data_entries": [
                 line for line in toc.decode().splitlines() if "TABLE DATA" in line
             ]}), flush=True)
