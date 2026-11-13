@@ -94,9 +94,12 @@ def main():
         # rather than discarding rows to fit an older bundled schema.
         prepare = "DROP SCHEMA auth CASCADE;"
         if b"CREATE SCHEMA auth;" not in sql:
-            prepare += " CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;"
+            prepare += " CREATE SCHEMA auth AUTHORIZATION supabase_admin;"
         if b"CREATE SCHEMA fulbo_parejo;" not in sql:
             prepare += " CREATE SCHEMA fulbo_parejo AUTHORIZATION postgres;"
+        prepare += " GRANT USAGE ON SCHEMA fulbo_parejo TO authenticated, service_role;"
+        prepare += " GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role, postgres;"
+        prepare += " GRANT ALL ON SCHEMA auth TO supabase_auth_admin, dashboard_user;"
         run(psql + ["--single-transaction", "-c", prepare, "-f", str(restore_sql)])
         restored = run(["pg_dump", "--data-only", *selection])
         actual = copies(restored)
