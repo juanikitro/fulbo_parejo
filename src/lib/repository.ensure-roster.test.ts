@@ -6,7 +6,7 @@ const queries = vi.hoisted(() => {
   const order = vi.fn(() => ({ limit }))
   const eq = vi.fn(() => ({ order }))
   const select = vi.fn(() => ({ eq }))
-  const from = vi.fn(() => ({ select }))
+  const from = vi.fn((_relation: string) => ({ select }))
   return { maybeSingle, limit, order, from }
 })
 
@@ -24,5 +24,21 @@ describe('ensureRoster', () => {
 
     expect(queries.order).toHaveBeenCalledWith('created_at', { ascending: true })
     expect(queries.limit).toHaveBeenCalledWith(1)
+  })
+
+  it('abre el plantel compartido de una cuenta sin plantel propio sin intentar crear uno', async () => {
+    queries.from.mockClear()
+    queries.maybeSingle
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockImplementationOnce(async () => {
+        const relation = queries.from.mock.lastCall?.[0]
+        return relation === 'roster_access'
+          ? { data: { roster_id: 'plantel-compartido' }, error: null }
+          : { data: null, error: { code: '42501', message: 'permission denied' } }
+      })
+
+    await expect(ensureRoster({ id: 'cuenta-colaboradora' } as never)).resolves.toBe('plantel-compartido')
+
+    expect(queries.from.mock.calls).toEqual([['rosters'], ['roster_access']])
   })
 })

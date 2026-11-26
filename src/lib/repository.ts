@@ -61,7 +61,7 @@ export async function ensureRoster(user: User) {
   const existing = await db.from('rosters').select('id').eq('owner_id', user.id).order('created_at', { ascending: true }).limit(1).maybeSingle()
   if (existing.error) throw existing.error
   if (existing.data) return existing.data.id as string
-  const membership = await db.from('roster_members').select('roster_id').eq('user_id', user.id).order('created_at').limit(1).maybeSingle()
+  const membership = await db.from('roster_access').select('roster_id').eq('user_id', user.id).order('created_at').limit(1).maybeSingle()
   if (membership.error) throw membership.error
   if (membership.data) return membership.data.roster_id as string
   const created = await db.from('rosters').insert({ owner_id: user.id, name: 'Mi plantel' }).select('id').single()
